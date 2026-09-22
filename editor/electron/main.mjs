@@ -2,6 +2,7 @@ import { app, BrowserWindow, Menu } from 'electron';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { createEditorMenuTemplate } from './menu-template.mjs';
 import { installNavigationPolicy, registerSchemePrivileges } from './security.mjs';
 import { registerApplicationProtocol } from './protocol.mjs';
 
@@ -28,37 +29,10 @@ const sendEditorCommand = (command) => {
 };
 
 const createMenu = () => {
-    const menu = Menu.buildFromTemplate([
-        {
-            label: 'File',
-            submenu: [
-                { role: 'close' }
-            ]
-        },
-        {
-            label: 'Edit',
-            submenu: [
-                { label: 'Undo', accelerator: 'CommandOrControl+Z', click: () => sendEditorCommand('undo') },
-                { label: 'Redo', accelerator: 'CommandOrControl+Shift+Z', click: () => sendEditorCommand('redo') }
-            ]
-        },
-        {
-            label: 'View',
-            submenu: [
-                { label: 'Frame Selection', accelerator: 'F', click: () => sendEditorCommand('focusSelected') },
-                { label: 'Frame All', accelerator: 'Shift+F', click: () => sendEditorCommand('frameAll') },
-                { type: 'separator' },
-                ...(isDevelopment ? [{ role: 'toggleDevTools' }] : [])
-            ]
-        },
-        {
-            label: 'Help',
-            submenu: [
-                { role: 'about' }
-            ]
-        }
-    ]);
-    Menu.setApplicationMenu(menu);
+    Menu.setApplicationMenu(Menu.buildFromTemplate(createEditorMenuTemplate({
+        isDevelopment,
+        sendEditorCommand
+    })));
 };
 
 const createWindow = async () => {
