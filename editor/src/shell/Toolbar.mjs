@@ -12,6 +12,17 @@ export function Toolbar({ state, dispatch, ready, isNavigationActive }) {
     const stateRef = useRef(state);
     stateRef.current = state;
 
+    const toggleCoordinateSpace = () => {
+        if (stateRef.current.activeTool === 'scale') {
+            return false;
+        }
+        dispatch({
+            type: 'setCoordinateSpace',
+            coordinateSpace: stateRef.current.coordinateSpace === 'world' ? 'local' : 'world'
+        });
+        return true;
+    };
+
     useEffect(() => {
         /** @param {KeyboardEvent} event - Keyboard event. */
         const onKeyDown = (event) => {
@@ -35,6 +46,13 @@ export function Toolbar({ state, dispatch, ready, isNavigationActive }) {
                 return;
             }
 
+            if (key === 'x' || key === '`' || key === '~' || event.code === 'Backquote') {
+                if (toggleCoordinateSpace()) {
+                    event.preventDefault();
+                }
+                return;
+            }
+
             switch (key) {
                 case 'q':
                     event.preventDefault();
@@ -55,15 +73,6 @@ export function Toolbar({ state, dispatch, ready, isNavigationActive }) {
                     event.preventDefault();
                     dispatch({ type: 'setTransformTool', tool: 'scale' });
                     break;
-                case 'x':
-                    if (state.activeTool !== 'scale') {
-                        event.preventDefault();
-                        dispatch({
-                            type: 'setCoordinateSpace',
-                            coordinateSpace: stateRef.current.coordinateSpace === 'world' ? 'local' : 'world'
-                        });
-                    }
-                    break;
                 case 'f':
                     event.preventDefault();
                     dispatch(event.shiftKey ? { type: 'frameAll' } : { type: 'focusSelected' });
@@ -77,7 +86,7 @@ export function Toolbar({ state, dispatch, ready, isNavigationActive }) {
 
         window.addEventListener('keydown', onKeyDown);
         return () => window.removeEventListener('keydown', onKeyDown);
-    }, [dispatch, ready, state.activeTool, state.coordinateSpace, isNavigationActive]);
+    }, [dispatch, ready, isNavigationActive]);
 
     const toolButton = (tool, label, shortcut, title) => jsx(Button, {
         class: ['toolbar-button', 'toolbar-tool', ...(state.activeTool === tool ? ['toolbar-button-active'] : [])],
@@ -118,12 +127,9 @@ export function Toolbar({ state, dispatch, ready, isNavigationActive }) {
         jsx(Button, {
             class: ['toolbar-button', 'coordinate-space'],
             text: effectiveSpace === 'world' ? 'World' : 'Local',
-            tooltip: state.activeTool === 'scale' ? 'Scale uses local space' : 'Toggle world/local transform space (X)',
+            tooltip: state.activeTool === 'scale' ? 'Scale uses local space' : 'Toggle world/local transform space (~ / X)',
             disabled: !ready || state.activeTool === 'scale',
-            onClick: () => dispatch({
-                type: 'setCoordinateSpace',
-                coordinateSpace: stateRef.current.coordinateSpace === 'world' ? 'local' : 'world'
-            })
+            onClick: toggleCoordinateSpace
         }),
         jsx(Button, {
             class: ['toolbar-button', 'snap-button', ...(state.snap.enabled ? ['toolbar-button-active'] : [])],

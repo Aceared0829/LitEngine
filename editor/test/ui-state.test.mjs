@@ -85,4 +85,86 @@ test('Inspector and toolbar maintain current state through real React DOM events
     assert.equal(commands.at(-1).enabled, false);
     await act(() => document.querySelector('.coordinate-space').click());
     assert.equal(commands.at(-1).coordinateSpace, 'world');
+
+    // Test coordinate space toggling via ~, `, Backquote, and x
+    state = { ...state, coordinateSpace: 'world', activeTool: 'translate' };
+    await renderToolbar();
+
+    const dispatchKey = (init, target = window) => {
+        const event = new dom.window.KeyboardEvent('keydown', { cancelable: true, bubbles: true, ...init });
+        target.dispatchEvent(event);
+        return event;
+    };
+
+    // ~ toggles world -> local
+    let keyEvent = dispatchKey({ key: '~', code: 'Backquote' });
+    assert.equal(keyEvent.defaultPrevented, true);
+    assert.equal(commands.at(-1).type, 'setCoordinateSpace');
+    assert.equal(commands.at(-1).coordinateSpace, 'local');
+
+    // Update state to local and verify ~ toggles local -> world
+    state = { ...state, coordinateSpace: 'local' };
+    await renderToolbar();
+    keyEvent = dispatchKey({ key: '~', code: 'Backquote' });
+    assert.equal(commands.at(-1).coordinateSpace, 'world');
+
+    // ` (backtick) toggles coordinate space
+    state = { ...state, coordinateSpace: 'world' };
+    await renderToolbar();
+    dispatchKey({ key: '`', code: 'Backquote' });
+    assert.equal(commands.at(-1).coordinateSpace, 'local');
+
+    // event.code === 'Backquote' with alternative key toggles coordinate space
+    state = { ...state, coordinateSpace: 'local' };
+    await renderToolbar();
+    dispatchKey({ key: 'Unidentified', code: 'Backquote' });
+    assert.equal(commands.at(-1).coordinateSpace, 'world');
+
+    // 'x' alias still toggles coordinate space
+    state = { ...state, coordinateSpace: 'world' };
+    await renderToolbar();
+    dispatchKey({ key: 'x' });
+    assert.equal(commands.at(-1).coordinateSpace, 'local');
+
+    // Ignored when activeTool === 'scale'
+    state = { ...state, activeTool: 'scale' };
+    await renderToolbar();
+    const commandCountBeforeScale = commands.length;
+    dispatchKey({ key: '~', code: 'Backquote' });
+    dispatchKey({ key: '`', code: 'Backquote' });
+    dispatchKey({ key: 'x' });
+    assert.equal(commands.length, commandCountBeforeScale);
+
+    // Ignored when navigation is active
+    let navActive = true;
+    const renderNavToolbar = () => act(() => root.render(createElement(Toolbar, { state: { ...state, activeTool: 'translate' }, dispatch, ready: true, isNavigationActive: () => navActive })));
+    await renderNavToolbar();
+    const commandCountBeforeNav = commands.length;
+    dispatchKey({ key: '~', code: 'Backquote' });
+    dispatchKey({ key: '`', code: 'Backquote' });
+    assert.equal(commands.length, commandCountBeforeNav);
+
+    // Works when navigation becomes inactive
+    navActive = false;
+    await renderNavToolbar();
+    dispatchKey({ key: '~', code: 'Backquote' });
+    assert.equal(commands.at(-1).coordinateSpace, 'local');
+
+    // Ignored when typing in an editable input target
+    const input = document.createElement('input');
+    document.body.appendChild(input);
+    const commandCountBeforeInput = commands.length;
+    dispatchKey({ key: '~', code: 'Backquote' }, input);
+    assert.equal(commands.length, commandCountBeforeInput);
+    input.remove();
+
+    // Verify Viewport chrome and hint reflect coordinate space shortcut
+    const { Viewport } = await import('../src/shell/Viewport.mjs');
+    const canvasRef = { current: document.createElement('canvas') };
+    await act(() => root.render(createElement(Viewport, { canvasRef, state: { ...state, coordinateSpace: 'world', activeTool: 'translate' }, dispatch })));
+    const spaceIndicator = document.querySelector('.viewport-toolbar span[title*="~"]');
+    assert.ok(spaceIndicator);
+    assert.equal(spaceIndicator.textContent, 'World');
+    const hint = document.querySelector('.viewport-hint');
+    assert.ok(hint.textContent.includes('~ toggle space'));
 });
