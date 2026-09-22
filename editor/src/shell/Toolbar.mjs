@@ -2,19 +2,12 @@ import { Button, Container } from '@playcanvas/pcui/react';
 import { useEffect } from 'react';
 
 import { jsx } from '../jsx.mjs';
+import { isEditableTarget } from '../runtime/navigation-input.mjs';
 
 /**
- * @param {EventTarget | null} target - Potential active element.
- * @returns {boolean} Whether the target owns editable text input.
+ * @param {{ state: import('../domain/editor-reducer.mjs').EditorState, dispatch: (command: import('../contracts/editor-contracts.mjs').EditorCommand) => void, ready: boolean, isNavigationActive: () => boolean }} props - Toolbar props.
  */
-const isEditableTarget = (target) => {
-    return target instanceof HTMLElement && Boolean(target.closest('input, textarea, select, [contenteditable="true"], .pcui-text-input'));
-};
-
-/**
- * @param {{ state: import('../domain/editor-reducer.mjs').EditorState, dispatch: (command: import('../contracts/editor-contracts.mjs').EditorCommand) => void, ready: boolean }} props - Toolbar props.
- */
-export function Toolbar({ state, dispatch, ready }) {
+export function Toolbar({ state, dispatch, ready, isNavigationActive }) {
     const effectiveSpace = state.activeTool === 'scale' ? 'local' : state.coordinateSpace;
 
     useEffect(() => {
@@ -36,7 +29,7 @@ export function Toolbar({ state, dispatch, ready }) {
                 dispatch({ type: 'redo' });
                 return;
             }
-            if (!ready || hasMeta || event.altKey || state.viewportNavigationActive) {
+            if (!ready || hasMeta || event.altKey || isNavigationActive()) {
                 return;
             }
 
@@ -82,7 +75,7 @@ export function Toolbar({ state, dispatch, ready }) {
 
         window.addEventListener('keydown', onKeyDown);
         return () => window.removeEventListener('keydown', onKeyDown);
-    }, [dispatch, ready, state.activeTool, state.coordinateSpace, state.viewportNavigationActive]);
+    }, [dispatch, ready, state.activeTool, state.coordinateSpace, isNavigationActive]);
 
     const toolButton = (tool, label, shortcut, title) => jsx(Button, {
         class: ['toolbar-button', 'toolbar-tool', ...(state.activeTool === tool ? ['toolbar-button-active'] : [])],

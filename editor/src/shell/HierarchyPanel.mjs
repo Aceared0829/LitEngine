@@ -14,9 +14,9 @@ const matchesQuery = (value, query) => {
 };
 
 /**
- * @param {{ state: import('../domain/editor-reducer.mjs').EditorState, dispatch: (command: import('../contracts/editor-contracts.mjs').EditorCommand) => void, ready: boolean, collapsed: boolean, onToggle: () => void }} props - Scene list props.
+ * @param {{ state: import('../domain/editor-reducer.mjs').EditorState, dispatch: (command: import('../contracts/editor-contracts.mjs').EditorCommand) => void, ready: boolean, collapsed: boolean }} props - Scene list props.
  */
-export function HierarchyPanel({ state, dispatch, ready, collapsed, onToggle }) {
+export function HierarchyPanel({ state, dispatch, ready, collapsed }) {
     const [query, setQuery] = useState('');
     const entities = useMemo(() => {
         return state.scene.entities.filter(entity => matchesQuery(`${entity.name} ${entity.type} ${entity.components.join(' ')}`, query));
@@ -25,14 +25,6 @@ export function HierarchyPanel({ state, dispatch, ready, collapsed, onToggle }) 
     return jsx(
         Panel,
         { class: ['editor-panel', 'hierarchy-panel'], headerText: collapsed ? 'Scene' : 'Scene Outliner' },
-        jsx('div', { className: 'panel-header-actions' },
-            jsx(Button, {
-                class: 'panel-action-button',
-                text: collapsed ? '›' : '‹',
-                tooltip: collapsed ? 'Expand Scene panel' : 'Collapse Scene panel',
-                onClick: onToggle
-            })
-        ),
         !collapsed && jsx('div', { className: 'scene-panel-content' },
             jsx('div', { className: 'scene-search' },
                 jsx(TextInput, {

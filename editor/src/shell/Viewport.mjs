@@ -26,18 +26,29 @@ export function Viewport({ canvasRef, state, dispatch }) {
             jsx('span', { className: 'viewport-separator' }),
             jsx('span', { className: state.snap.enabled ? 'snap-indicator is-enabled' : 'snap-indicator' }, `Snap ${state.snap.enabled ? 'On' : 'Off'}`),
             jsx('span', { className: 'viewport-chrome-spacer' }),
+            jsx('label', { className: 'viewport-speed' }, 'Speed ', jsx('input', {
+                type: 'number',
+                min: 0.1,
+                max: 1000,
+                step: 0.1,
+                'aria-label': 'Camera fly speed',
+                value: Number(state.flySpeed.toFixed(2)),
+                onChange: event => dispatch({ type: 'setFlySpeed', speed: Number(event.target.value) })
+            })),
             jsx(Button, {
                 class: 'viewport-help-button',
                 text: '?',
                 tooltip: 'Viewport navigation help',
-                onClick: () => setShowHelp(!showHelp)
+                onClick: () => setShowHelp(current => !current)
             })
         ),
         showHelp && jsx('div', { className: 'viewport-help-card', role: 'dialog', 'aria-label': 'Viewport navigation help' },
-            jsx('strong', null, 'Viewport navigation'),
-            jsx('p', null, 'Click select · drag LMB orbit · MMB / Shift+LMB pan · wheel zoom'),
-            jsx('p', null, 'Hold RMB for fly look and WASD / arrows movement · Q/E vertical move'),
-            jsx('p', null, 'Q/W/E/R tools work when RMB navigation is not held · F frame selected · Shift+F frame all')
+            jsx('strong', null, 'UE-style perspective navigation'),
+            jsx('p', null, 'Click LMB to select · drag LMB to move forward/back and turn · drag RMB to look'),
+            jsx('p', null, 'LMB + RMB / MMB drag to pan · wheel to dolly · RMB + wheel to adjust fly speed'),
+            jsx('p', null, 'Hold RMB + WASD / arrows to fly · E/Q move along world up/down (Y-up in PlayCanvas)'),
+            jsx('p', null, 'Alt + LMB orbit · Alt + RMB dolly · Alt + MMB pan · F frame selection'),
+            jsx('p', null, 'Q/W/E/R tools outside navigation · Shift+F frame all · Shift/Ctrl fast/slow fly')
         ),
         jsx('div', { className: 'viewport-hint' }, 'Hold RMB + WASD to fly · Q/W/E/R tools · F to frame')
     );

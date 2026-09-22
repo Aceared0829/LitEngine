@@ -29,9 +29,9 @@ function TransformVectorInput({ field, value, onChange }) {
 }
 
 /**
- * @param {{ state: import('../domain/editor-reducer.mjs').EditorState, dispatch: (command: import('../contracts/editor-contracts.mjs').EditorCommand) => void, ready: boolean, collapsed: boolean, onToggle: () => void }} props - Inspector props.
+ * @param {{ state: import('../domain/editor-reducer.mjs').EditorState, dispatch: (command: import('../contracts/editor-contracts.mjs').EditorCommand) => void, ready: boolean, collapsed: boolean }} props - Inspector props.
  */
-export function InspectorPanel({ state, dispatch, ready, collapsed, onToggle }) {
+export function InspectorPanel({ state, dispatch, ready, collapsed }) {
     const entity = getSelectedEntity(state);
     const [transformExpanded, setTransformExpanded] = useState(true);
     const selectionRef = useRef(null);
@@ -40,32 +40,13 @@ export function InspectorPanel({ state, dispatch, ready, collapsed, onToggle }) 
     transformRef.current = entity?.transform ?? null;
 
     if (collapsed) {
-        return jsx(
-            Panel,
-            { class: ['editor-panel', 'inspector-panel'], headerText: 'Inspector' },
-            jsx('div', { className: 'panel-header-actions' },
-                jsx(Button, {
-                    class: 'panel-action-button',
-                    text: '‹',
-                    tooltip: 'Expand Inspector panel',
-                    onClick: onToggle
-                })
-            )
-        );
+        return jsx(Panel, { class: ['editor-panel', 'inspector-panel'], headerText: 'Inspector' });
     }
 
     if (!entity) {
         return jsx(
             Panel,
             { class: ['editor-panel', 'inspector-panel'], headerText: 'Inspector' },
-            jsx('div', { className: 'panel-header-actions' },
-                jsx(Button, {
-                    class: 'panel-action-button',
-                    text: '›',
-                    tooltip: 'Collapse Inspector panel',
-                    onClick: onToggle
-                })
-            ),
             jsx('p', { className: 'empty-selection' }, 'Select a scene entity to inspect its properties.')
         );
     }
@@ -120,14 +101,6 @@ export function InspectorPanel({ state, dispatch, ready, collapsed, onToggle }) 
     return jsx(
         Panel,
         { class: ['editor-panel', 'inspector-panel'], headerText: 'Inspector' },
-        jsx('div', { className: 'panel-header-actions' },
-            jsx(Button, {
-                class: 'panel-action-button',
-                text: '›',
-                tooltip: 'Collapse Inspector panel',
-                onClick: onToggle
-            })
-        ),
         jsx('section', { className: 'inspector-identity' },
             jsx('div', null,
                 jsx('p', { className: 'inspector-kicker' }, 'Selected Entity'),
