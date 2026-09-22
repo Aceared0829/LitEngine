@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 
 import { EditorController } from '../bridge/editor-controller.mjs';
 import { initialEditorState } from '../domain/editor-reducer.mjs';
+import { onDesktopEditorCommand } from '../platform/desktop-api.mjs';
 import { jsx } from '../jsx.mjs';
 import { DockResizeHandle } from './DockResizeHandle.mjs';
 import { HierarchyPanel } from './HierarchyPanel.mjs';
@@ -40,6 +41,8 @@ export function EditorApp() {
     /** @param {import('../contracts/editor-contracts.mjs').EditorCommand} command - Editor intent. */
     const dispatch = command => controllerRef.current?.dispatch(command);
     const ready = state.runtimeStatus === 'ready';
+
+    useEffect(() => onDesktopEditorCommand(dispatch), [dispatch]);
 
     return jsx(
         'div',
