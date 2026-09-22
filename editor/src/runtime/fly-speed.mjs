@@ -27,23 +27,3 @@ export const adjustFlySpeed = (speed, steps) => {
     }
     return Math.max(MIN_FLY_SPEED, Math.min(MAX_FLY_SPEED, speed * Math.pow(SPEED_FACTOR, direction * Math.abs(steps))));
 };
-
-/**
- * @param {{ moveSpeed: number, moveFastSpeed: number, moveSlowSpeed: number }} controls - Public camera speed fields.
- * @returns {{ fast: number, slow: number }} Fast/slow speed ratios.
- */
-export const getFlySpeedRatios = controls => ({
-    fast: controls.moveFastSpeed / controls.moveSpeed,
-    slow: controls.moveSlowSpeed / controls.moveSpeed
-});
-
-/**
- * @param {{ moveSpeed: number, moveFastSpeed: number, moveSlowSpeed: number }} controls - Public camera speed fields.
- * @param {number} speed - New base fly speed.
- * @param {{ fast: number, slow: number }} ratios - Preserved multiplier ratios.
- */
-export const setFlySpeed = (controls, speed, ratios) => {
-    controls.moveSpeed = speed;
-    controls.moveFastSpeed = speed * ratios.fast;
-    controls.moveSlowSpeed = speed * ratios.slow;
-};

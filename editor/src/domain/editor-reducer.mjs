@@ -28,6 +28,7 @@ export const defaultSnapSettings = {
  * @property {HistorySnapshot} history - Transform history availability.
  * @property {SnapSettings} snap - Gizmo snapping preferences.
  * @property {boolean} viewportNavigationActive - Whether RMB viewport navigation owns keyboard input.
+ * @property {number} flySpeed - Perspective camera movement speed.
  * @property {string} statusMessage - Short runtime feedback for the status bar.
  * @property {string | null} error - Runtime initialization error.
  */
@@ -42,6 +43,7 @@ export const initialEditorState = {
     history: emptyHistory,
     snap: defaultSnapSettings,
     viewportNavigationActive: false,
+    flySpeed: 10,
     statusMessage: '正在初始化本地编辑器…',
     error: null
 };
@@ -102,6 +104,8 @@ export const editorReducer = (state, event) => {
                 ...state,
                 viewportNavigationActive: event.active
             };
+        case 'flySpeedChanged':
+            return { ...state, flySpeed: event.speed };
         case 'statusChanged':
             return {
                 ...state,

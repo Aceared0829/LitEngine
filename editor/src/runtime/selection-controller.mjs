@@ -43,7 +43,7 @@ export class SelectionController {
     /** @type {(event: PointerEvent) => void} */
     #onPointerDown = (event) => {
         this.#requestId++;
-        if (event.button !== 0) {
+        if (event.button !== 0 || event.altKey) {
             this.#pointerId = null;
             this.#gizmoPointerDown = false;
             return;
@@ -51,6 +51,16 @@ export class SelectionController {
         this.#pointerId = event.pointerId;
         this.#gizmoPointerDown = this.#isInteractionBlocked();
         this.#pointerDown.set(event.clientX, event.clientY);
+    };
+
+    /** @type {(event: PointerEvent) => void} */
+    #onPointerMove = (event) => {
+        if (event.pointerId === this.#pointerId &&
+            (event.altKey || event.buttons !== 1 ||
+             Math.abs(event.clientX - this.#pointerDown.x) > CLICK_TOLERANCE ||
+             Math.abs(event.clientY - this.#pointerDown.y) > CLICK_TOLERANCE)) {
+            this.invalidatePendingSelection();
+        }
     };
 
     /** @type {(event: PointerEvent) => void} */
@@ -113,6 +123,7 @@ export class SelectionController {
         this.#picker = picker ?? new Picker(app, canvas.clientWidth, canvas.clientHeight);
 
         canvas.addEventListener('pointerdown', this.#onPointerDown);
+        canvas.addEventListener('pointermove', this.#onPointerMove);
         canvas.addEventListener('pointerup', this.#onPointerUp);
         canvas.addEventListener('pointercancel', this.#onPointerCancel);
     }
@@ -129,6 +140,7 @@ export class SelectionController {
     destroy() {
         this.#requestId++;
         this.#canvas.removeEventListener('pointerdown', this.#onPointerDown);
+        this.#canvas.removeEventListener('pointermove', this.#onPointerMove);
         this.#canvas.removeEventListener('pointerup', this.#onPointerUp);
         this.#canvas.removeEventListener('pointercancel', this.#onPointerCancel);
         this.#picker.destroy();

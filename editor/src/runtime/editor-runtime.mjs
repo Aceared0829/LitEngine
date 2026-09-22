@@ -113,8 +113,16 @@ export class EditorRuntime {
                 camera,
                 this.#canvas,
                 this.#transformController,
-                active => this.#emit({ type: 'viewportNavigationChanged', active }),
-                speed => this.#emit({ type: 'statusChanged', message: `Fly speed: ${speed.toFixed(1)}` })
+                (active) => {
+                    if (active) {
+                        this.#selectionController?.invalidatePendingSelection();
+                    }
+                    this.#emit({ type: 'viewportNavigationChanged', active });
+                },
+                (speed) => {
+                    this.#emit({ type: 'flySpeedChanged', speed });
+                    this.#emit({ type: 'statusChanged', message: `Fly speed: ${speed.toFixed(1)}` });
+                }
             );
             const worldLayer = app.scene.layers.getLayerByName('World');
             this.#selectionController = new SelectionController(
@@ -189,6 +197,9 @@ export class EditorRuntime {
                 break;
             case 'frameAll':
                 this.#frameAll();
+                break;
+            case 'setFlySpeed':
+                this.#viewportTools?.setFlySpeed(command.speed);
                 break;
             case 'resetScene':
                 this.#resetScene();
@@ -273,8 +284,8 @@ export class EditorRuntime {
      * @param {string | null} entityId - ID to select.
      */
     #selectById(entityId) {
-        this.#selectedEntityId = entityId;
         this.#viewportTools?.select(this.#scene.getEntity(entityId));
+        this.#selectedEntityId = entityId;
         this.#emit({ type: 'selectionChanged', entityId });
         this.#emit({ type: 'statusChanged', message: entityId ? `Selected ${this.#scene.getEntity(entityId)?.name ?? 'Entity'}` : 'Selection cleared' });
     }

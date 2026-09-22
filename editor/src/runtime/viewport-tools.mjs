@@ -1,9 +1,7 @@
-import { CameraControls } from 'playcanvas/scripts/esm/camera-controls.mjs';
 import { Grid } from 'playcanvas/scripts/esm/grid.mjs';
 import { BoundingBox, Color, Layer, OutlineRenderer, Vec3, Vec4, ViewCube } from 'playcanvas';
 
-import { adjustFlySpeed, getFlySpeedRatios, getWheelSteps, setFlySpeed } from './fly-speed.mjs';
-import { releasedNavigationButton } from './navigation-pointer.mjs';
+import { ViewportCameraControls } from './viewport-camera-controls.mjs';
 
 /**
  * @import { AppBase, Entity } from 'playcanvas'
@@ -28,7 +26,7 @@ export class ViewportTools {
     /** @type {Entity} */
     #cameraEntity;
 
-    /** @type {CameraControls} */
+    /** @type {ViewportCameraControls} */
     #cameraControls;
 
     /** @type {OutlineRenderer} */
@@ -46,38 +44,6 @@ export class ViewportTools {
     /** @type {import('./transform-controller.mjs').TransformController} */
     #transformController;
 
-    /** @type {(active: boolean) => void} */
-    #onNavigationChange;
-
-    /** @type {(speed: number) => void} */
-    #onFlySpeedChange;
-
-    /** @type {{ fast: number, slow: number }} */
-    #flySpeedRatios;
-
-    #flySpeed;
-
-    /** @type {number | null} */
-    #navigationPointerId = null;
-
-    /** @type {(event: PointerEvent) => void} */
-    #onPointerDown;
-
-    /** @type {(event: PointerEvent) => void} */
-    #onPointerMove;
-
-    /** @type {(event: PointerEvent) => void} */
-    #onPointerUp;
-
-    /** @type {(event: PointerEvent) => void} */
-    #onPointerCancel;
-
-    /** @type {(event: WheelEvent) => void} */
-    #onWheel;
-
-    /** @type {() => void} */
-    #onWindowBlur;
-
     /**
      * @param {AppBase} app - PlayCanvas app.
      * @param {Entity} cameraEntity - Viewport camera entity.
@@ -92,61 +58,7 @@ export class ViewportTools {
         this.#camera = cameraEntity.camera;
         this.#canvas = canvas;
         this.#transformController = transformController;
-        this.#onNavigationChange = onNavigationChange;
-        this.#onFlySpeedChange = onFlySpeedChange;
-
-        this.#cameraControls = /** @type {CameraControls} */ (cameraEntity.script.create(CameraControls));
-        Object.assign(this.#cameraControls, {
-            focusPoint: Vec3.ZERO,
-            rotateDamping: 0,
-            moveDamping: 0
-        });
-        this.#cameraControls.enableFly = false;
-        this.#flySpeed = this.#cameraControls.moveSpeed;
-        this.#flySpeedRatios = getFlySpeedRatios(this.#cameraControls);
-
-        this.#onPointerDown = (event) => {
-            if (event.button !== 2 || this.#navigationPointerId !== null) {
-                return;
-            }
-            this.#navigationPointerId = event.pointerId;
-            this.#cameraControls.enableFly = true;
-            this.#onNavigationChange(true);
-        };
-        this.#onPointerMove = (event) => {
-            if (releasedNavigationButton(this.#navigationPointerId, event)) {
-                this.#endNavigation();
-            }
-        };
-        this.#onPointerUp = (event) => {
-            if (releasedNavigationButton(this.#navigationPointerId, event)) {
-                this.#endNavigation();
-            }
-        };
-        this.#onPointerCancel = (event) => {
-            if (event.pointerId === this.#navigationPointerId) {
-                this.#endNavigation();
-            }
-        };
-        this.#onWheel = (event) => {
-            if (this.#navigationPointerId === null || !(event.buttons & 2)) {
-                return;
-            }
-
-            event.preventDefault();
-            event.stopImmediatePropagation();
-            this.#flySpeed = adjustFlySpeed(this.#flySpeed, getWheelSteps(event));
-            setFlySpeed(this.#cameraControls, this.#flySpeed, this.#flySpeedRatios);
-            this.#onFlySpeedChange(this.#flySpeed);
-        };
-        this.#onWindowBlur = () => this.#endNavigation();
-        canvas.addEventListener('pointerdown', this.#onPointerDown, true);
-        window.addEventListener('pointermove', this.#onPointerMove, true);
-        window.addEventListener('pointerup', this.#onPointerUp, true);
-        canvas.addEventListener('pointercancel', this.#onPointerCancel);
-        canvas.addEventListener('lostpointercapture', this.#onPointerCancel);
-        canvas.addEventListener('wheel', this.#onWheel, { capture: true, passive: false });
-        window.addEventListener('blur', this.#onWindowBlur);
+        this.#cameraControls = new ViewportCameraControls(app, cameraEntity, canvas, onNavigationChange, onFlySpeedChange);
 
         const outlineLayer = new Layer({ name: 'EditorOutline' });
         app.scene.layers.push(outlineLayer);
@@ -178,6 +90,7 @@ export class ViewportTools {
         this.#outlineRenderer.removeAllEntities();
         if (entity) {
             this.#outlineRenderer.addEntity(entity, Color.WHITE);
+            this.#cameraControls.setPivot(entity.getPosition());
         }
         this.#transformController.select(entity);
     }
@@ -187,6 +100,13 @@ export class ViewportTools {
      */
     setCameraControlEnabled(enabled) {
         this.#cameraControls.enabled = enabled;
+    }
+
+    /**
+     * @param {number} speed - Requested camera movement speed.
+     */
+    setFlySpeed(speed) {
+        this.#cameraControls.setFlySpeed(speed);
     }
 
     /**
@@ -256,35 +176,21 @@ export class ViewportTools {
         }
 
         const radius = hasBounds ? Math.max(tmpBounds.halfExtents.length(), 0.5) : 1;
-        const verticalFov = this.#camera.horizontalFov ? this.#camera.fov / this.#camera.aspectRatio : this.#camera.fov;
+        const halfFov = this.#camera.fov * Math.PI / 360;
+        const verticalHalfFov = this.#camera.horizontalFov ? Math.atan(Math.tan(halfFov) / this.#camera.aspectRatio) : halfFov;
+        const horizontalHalfFov = Math.atan(Math.tan(verticalHalfFov) * this.#camera.aspectRatio);
         const distance = Math.max(
             MIN_FRAME_DISTANCE,
-            radius * FRAME_MARGIN / Math.tan((verticalFov * Math.PI / 180) * 0.5)
+            radius * FRAME_MARGIN / Math.sin(Math.min(verticalHalfFov, horizontalHalfFov))
         );
-        tmpDirection.copy(this.#cameraEntity.getPosition()).sub(this.#cameraControls.focusPoint).normalize();
+        tmpDirection.copy(this.#cameraEntity.forward).mulScalar(-1);
         tmpPosition.copy(tmpDirection).mulScalar(distance).add(center);
         this.#cameraControls.reset(center, tmpPosition);
         return true;
     }
 
-    #endNavigation() {
-        if (this.#navigationPointerId === null) {
-            return;
-        }
-        this.#navigationPointerId = null;
-        this.#cameraControls.enableFly = false;
-        this.#onNavigationChange(false);
-    }
-
     destroy() {
-        this.#endNavigation();
-        this.#canvas.removeEventListener('pointerdown', this.#onPointerDown, true);
-        window.removeEventListener('pointermove', this.#onPointerMove, true);
-        window.removeEventListener('pointerup', this.#onPointerUp, true);
-        this.#canvas.removeEventListener('pointercancel', this.#onPointerCancel);
-        this.#canvas.removeEventListener('lostpointercapture', this.#onPointerCancel);
-        this.#canvas.removeEventListener('wheel', this.#onWheel, true);
-        window.removeEventListener('blur', this.#onWindowBlur);
+        this.#cameraControls.destroy();
         this.#resizeObserver.disconnect();
         this.#viewCube.destroy();
         this.#outlineRenderer.destroy();

@@ -44,9 +44,10 @@
  * @typedef {{ type: 'redo' }} RedoCommand
  * @typedef {{ type: 'focusSelected' }} FocusSelectedCommand
  * @typedef {{ type: 'frameAll' }} FrameAllCommand
+ * @typedef {{ type: 'setFlySpeed', speed: number }} SetFlySpeedCommand
  * @typedef {{ type: 'resetScene' }} ResetSceneCommand
  *
- * @typedef {SelectEntityCommand | SetTransformCommand | ResetTransformFieldCommand | SetTransformToolCommand | SetCoordinateSpaceCommand | SetSnapEnabledCommand | SetSnapIncrementCommand | UndoCommand | RedoCommand | FocusSelectedCommand | FrameAllCommand | ResetSceneCommand} EditorCommand
+ * @typedef {SelectEntityCommand | SetTransformCommand | ResetTransformFieldCommand | SetTransformToolCommand | SetCoordinateSpaceCommand | SetSnapEnabledCommand | SetSnapIncrementCommand | UndoCommand | RedoCommand | FocusSelectedCommand | FrameAllCommand | SetFlySpeedCommand | ResetSceneCommand} EditorCommand
  *
  * @typedef {{ type: 'ready', scene: SceneSnapshot, history: HistorySnapshot, snap: SnapSettings }} ReadyEvent
  * @typedef {{ type: 'sceneChanged', scene: SceneSnapshot }} SceneChangedEvent
@@ -55,10 +56,11 @@
  * @typedef {{ type: 'historyChanged', history: HistorySnapshot }} HistoryChangedEvent
  * @typedef {{ type: 'snapChanged', snap: SnapSettings }} SnapChangedEvent
  * @typedef {{ type: 'viewportNavigationChanged', active: boolean }} ViewportNavigationChangedEvent
+ * @typedef {{ type: 'flySpeedChanged', speed: number }} FlySpeedChangedEvent
  * @typedef {{ type: 'statusChanged', message: string }} StatusChangedEvent
  * @typedef {{ type: 'runtimeError', message: string }} RuntimeErrorEvent
  *
- * @typedef {ReadyEvent | SceneChangedEvent | SelectionChangedEvent | TransformChangedEvent | HistoryChangedEvent | SnapChangedEvent | ViewportNavigationChangedEvent | StatusChangedEvent | RuntimeErrorEvent} RuntimeEvent
+ * @typedef {ReadyEvent | SceneChangedEvent | SelectionChangedEvent | TransformChangedEvent | HistoryChangedEvent | SnapChangedEvent | ViewportNavigationChangedEvent | FlySpeedChangedEvent | StatusChangedEvent | RuntimeErrorEvent} RuntimeEvent
  */
 
 export {};

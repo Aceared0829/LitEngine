@@ -55,6 +55,9 @@ export class EditorController {
     dispatch(command) {
         switch (command.type) {
             case 'setTransformTool':
+                if (this.#state.viewportNavigationActive) {
+                    return;
+                }
                 this.#setState({ ...this.#state, activeTool: command.tool });
                 break;
             case 'setCoordinateSpace':

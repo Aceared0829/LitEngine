@@ -18,9 +18,9 @@ const createHarness = () => {
     const selected = [];
     let blocked = false;
     const controller = new SelectionController(canvas, { scene: {} }, {}, [], entity => selected.push(entity), () => blocked, picker);
-    const pointer = (type, { button = 0, pointerId = 1, clientX = 10, clientY = 10 } = {}) => {
+    const pointer = (type, { button = 0, buttons = 1, altKey = false, pointerId = 1, clientX = 10, clientY = 10 } = {}) => {
         const event = new Event(type);
-        Object.assign(event, { button, pointerId, clientX, clientY });
+        Object.assign(event, { button, buttons, altKey, pointerId, clientX, clientY });
         canvas.dispatchEvent(event);
     };
     return {
@@ -69,6 +69,20 @@ test('gizmo-owned clicks never pick after pointerup clears the gizmo flag', () =
     harness.setBlocked(true);
     harness.pointer('pointerdown');
     harness.setBlocked(false);
+    harness.pointer('pointerup');
+    assert.equal(harness.pending.length, 0);
+    harness.controller.destroy();
+});
+
+test('navigation gestures cannot turn into clicks when they end at their starting point', () => {
+    const harness = createHarness();
+    harness.pointer('pointerdown');
+    harness.pointer('pointermove', { clientX: 40 });
+    harness.pointer('pointerup');
+    harness.pointer('pointerdown', { altKey: true });
+    harness.pointer('pointerup');
+    harness.pointer('pointerdown');
+    harness.pointer('pointermove', { buttons: 3 });
     harness.pointer('pointerup');
     assert.equal(harness.pending.length, 0);
     harness.controller.destroy();
