@@ -1,32 +1,9 @@
-import { Button, Panel, VectorInput } from '@playcanvas/pcui/react';
+import { Button, Panel } from '@playcanvas/pcui/react';
 import { useRef, useState } from 'react';
 
 import { getSelectedEntity, isFiniteVector3 } from '../domain/editor-reducer.mjs';
 import { jsx } from '../jsx.mjs';
-
-/**
- * PCUI's React VectorInput emits change when React sets value, and retains its first onChange.
- * Only forward user edits, using the latest callback after the selected entity changes.
- *
- * @param {{ field: string, value: number[], onChange: (value: number[]) => void }} props - Vector field props.
- */
-function TransformVectorInput({ field, value, onChange }) {
-    const inputRef = useRef(null);
-    const onChangeRef = useRef(onChange);
-    onChangeRef.current = onChange;
-
-    return jsx(VectorInput, {
-        ref: inputRef,
-        class: ['transform-vector', `transform-vector-${field}`],
-        dimensions: 3,
-        value,
-        onChange: (nextValue) => {
-            if (!inputRef.current?.element?._suppressChange) {
-                onChangeRef.current(nextValue);
-            }
-        }
-    });
-}
+import { NumberField } from './NumberField.mjs';
 
 /**
  * @param {{ state: import('../domain/editor-reducer.mjs').EditorState, dispatch: (command: import('../contracts/editor-contracts.mjs').EditorCommand) => void, ready: boolean, collapsed: boolean }} props - Inspector props.
@@ -91,11 +68,19 @@ export function InspectorPanel({ state, dispatch, ready, collapsed }) {
                 }
             })
         ),
-        jsx(TransformVectorInput, {
-            field,
-            value: entity.transform[field],
-            onChange: value => updateTransform(entity.id, field, value)
-        })
+        jsx('div', { className: `transform-vector transform-vector-${field}`, key: entity.id },
+            ...entity.transform[field].map((value, index) => jsx('div', { className: 'pcui-numeric-input', key: index },
+                jsx(NumberField, {
+                    value,
+                    label: `${label} ${'XYZ'[index]}`,
+                    onCommit: (component) => {
+                        const vector = transformRef.current[field].slice();
+                        vector[index] = component;
+                        updateTransform(entity.id, field, vector);
+                    }
+                })
+            ))
+        )
     );
 
     return jsx(

@@ -618,9 +618,28 @@ input:focus-visible {
     color: #92a3b2;
 }
 
-.transform-vector.pcui-vector-input {
+.transform-vector {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 5px;
     min-width: 0;
     width: 100%;
+}
+
+.transform-vector .pcui-numeric-input {
+    min-width: 0;
+}
+
+.transform-vector input {
+    box-sizing: border-box;
+    width: 100%;
+    min-width: 0;
+    height: 28px;
+    border: 1px solid #435667;
+    border-radius: 3px;
+    padding: 3px 6px;
+    background: #202b33;
+    font: inherit;
 }
 
 .transform-vector .pcui-numeric-input:nth-child(1) input {

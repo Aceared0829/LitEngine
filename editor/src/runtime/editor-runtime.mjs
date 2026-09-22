@@ -37,6 +37,8 @@ export class EditorRuntime {
     /** @type {AppBase | null} */
     #app = null;
 
+    #destroyed = false;
+
     #scene = new SceneAdapter();
 
     #history = new TransformHistory();
@@ -76,6 +78,10 @@ export class EditorRuntime {
     async initialize() {
         try {
             const device = await createGraphicsDevice(this.#canvas);
+            if (this.#destroyed) {
+                device.destroy();
+                return;
+            }
             device.maxPixelRatio = Math.min(window.devicePixelRatio, 2);
 
             const options = new AppOptions();
@@ -143,6 +149,9 @@ export class EditorRuntime {
             });
             this.#selectById('box');
         } catch (error) {
+            if (this.#destroyed) {
+                return;
+            }
             this.#emit({
                 type: 'runtimeError',
                 message: error instanceof Error ? error.message : String(error)
@@ -172,10 +181,8 @@ export class EditorRuntime {
                 this.#emit({ type: 'statusChanged', message: this.#toolStatus(command.tool) });
                 break;
             case 'setCoordinateSpace':
-                if (this.#transformController?.effectiveCoordinateSpace !== 'local' || command.coordinateSpace === 'local') {
-                    this.#transformController?.setCoordinateSpace(command.coordinateSpace);
-                    this.#emit({ type: 'statusChanged', message: `${command.coordinateSpace === 'world' ? 'World' : 'Local'} transform space` });
-                }
+                this.#transformController?.setCoordinateSpace(command.coordinateSpace);
+                this.#emit({ type: 'statusChanged', message: `${command.coordinateSpace === 'world' ? 'World' : 'Local'} transform space` });
                 break;
             case 'setSnapEnabled':
                 this.#transformController?.setSnapEnabled(command.enabled);
@@ -424,6 +431,7 @@ export class EditorRuntime {
     }
 
     destroy() {
+        this.#destroyed = true;
         this.#selectionController?.destroy();
         this.#selectionController = null;
         this.#viewportTools?.destroy();

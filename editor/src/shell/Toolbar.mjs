@@ -1,5 +1,5 @@
 import { Button, Container } from '@playcanvas/pcui/react';
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 
 import { jsx } from '../jsx.mjs';
 import { isEditableTarget } from '../runtime/navigation-input.mjs';
@@ -9,6 +9,8 @@ import { isEditableTarget } from '../runtime/navigation-input.mjs';
  */
 export function Toolbar({ state, dispatch, ready, isNavigationActive }) {
     const effectiveSpace = state.activeTool === 'scale' ? 'local' : state.coordinateSpace;
+    const stateRef = useRef(state);
+    stateRef.current = state;
 
     useEffect(() => {
         /** @param {KeyboardEvent} event - Keyboard event. */
@@ -58,7 +60,7 @@ export function Toolbar({ state, dispatch, ready, isNavigationActive }) {
                         event.preventDefault();
                         dispatch({
                             type: 'setCoordinateSpace',
-                            coordinateSpace: state.coordinateSpace === 'world' ? 'local' : 'world'
+                            coordinateSpace: stateRef.current.coordinateSpace === 'world' ? 'local' : 'world'
                         });
                     }
                     break;
@@ -120,7 +122,7 @@ export function Toolbar({ state, dispatch, ready, isNavigationActive }) {
             disabled: !ready || state.activeTool === 'scale',
             onClick: () => dispatch({
                 type: 'setCoordinateSpace',
-                coordinateSpace: state.coordinateSpace === 'world' ? 'local' : 'world'
+                coordinateSpace: stateRef.current.coordinateSpace === 'world' ? 'local' : 'world'
             })
         }),
         jsx(Button, {
@@ -128,7 +130,7 @@ export function Toolbar({ state, dispatch, ready, isNavigationActive }) {
             text: `Snap ${state.snap.enabled ? 'On' : 'Off'} · ${increment}`,
             tooltip: `Toggle transform snap (${activeSnapTool} increment ${increment})`,
             disabled: !ready,
-            onClick: () => dispatch({ type: 'setSnapEnabled', enabled: !state.snap.enabled })
+            onClick: () => dispatch({ type: 'setSnapEnabled', enabled: !stateRef.current.snap.enabled })
         }),
         jsx('div', { className: 'toolbar-spacer' }),
         jsx(Button, {

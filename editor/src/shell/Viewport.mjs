@@ -2,6 +2,7 @@ import { Button } from '@playcanvas/pcui/react';
 import { useState } from 'react';
 
 import { jsx } from '../jsx.mjs';
+import { NumberField } from './NumberField.mjs';
 
 /**
  * @param {{ canvasRef: import('react').RefObject<HTMLCanvasElement | null>, state: import('../domain/editor-reducer.mjs').EditorState, dispatch: (command: import('../contracts/editor-contracts.mjs').EditorCommand) => void }} props - Viewport props.
@@ -26,14 +27,12 @@ export function Viewport({ canvasRef, state, dispatch }) {
             jsx('span', { className: 'viewport-separator' }),
             jsx('span', { className: state.snap.enabled ? 'snap-indicator is-enabled' : 'snap-indicator' }, `Snap ${state.snap.enabled ? 'On' : 'Off'}`),
             jsx('span', { className: 'viewport-chrome-spacer' }),
-            jsx('label', { className: 'viewport-speed' }, 'Speed ', jsx('input', {
-                type: 'number',
+            jsx('label', { className: 'viewport-speed' }, 'Speed ', jsx(NumberField, {
                 min: 0.1,
                 max: 1000,
-                step: 0.1,
-                'aria-label': 'Camera fly speed',
+                label: 'Camera fly speed',
                 value: Number(state.flySpeed.toFixed(2)),
-                onChange: event => dispatch({ type: 'setFlySpeed', speed: Number(event.target.value) })
+                onCommit: speed => dispatch({ type: 'setFlySpeed', speed })
             })),
             jsx(Button, {
                 class: 'viewport-help-button',
