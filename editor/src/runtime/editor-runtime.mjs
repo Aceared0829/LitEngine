@@ -4,7 +4,6 @@ import {
     CameraComponentSystem,
     Color,
     Entity,
-    FILLMODE_FILL_WINDOW,
     LightComponentSystem,
     RenderComponentSystem,
     RESOLUTION_AUTO,
@@ -37,6 +36,8 @@ export class EditorRuntime {
 
     /** @type {AppBase | null} */
     #app = null;
+
+    #destroyed = false;
 
     #scene = new SceneAdapter();
 
@@ -77,6 +78,10 @@ export class EditorRuntime {
     async initialize() {
         try {
             const device = await createGraphicsDevice(this.#canvas);
+            if (this.#destroyed) {
+                device.destroy();
+                return;
+            }
             device.maxPixelRatio = Math.min(window.devicePixelRatio, 2);
 
             const options = new AppOptions();
@@ -90,7 +95,6 @@ export class EditorRuntime {
 
             const app = new AppBase(this.#canvas);
             app.init(options);
-            app.setCanvasFillMode(FILLMODE_FILL_WINDOW);
             app.setCanvasResolution(RESOLUTION_AUTO);
             app.scene.ambientLight = new Color(0.2, 0.2, 0.2);
             this.#app = app;
@@ -102,12 +106,30 @@ export class EditorRuntime {
                 camera.camera,
                 (active) => {
                     this.#gizmoActive = active;
+                    if (active) {
+                        this.#selectionController?.invalidatePendingSelection();
+                    }
                     this.#viewportTools?.setCameraControlEnabled(!active);
                 },
                 transform => this.#emitTransformPreview(transform),
                 (before, after, label) => this.#commitTransform(this.#selectedEntityId, before, after, label)
             );
-            this.#viewportTools = new ViewportTools(app, camera, this.#canvas, this.#transformController);
+            this.#viewportTools = new ViewportTools(
+                app,
+                camera,
+                this.#canvas,
+                this.#transformController,
+                (active) => {
+                    if (active) {
+                        this.#selectionController?.invalidatePendingSelection();
+                    }
+                    this.#emit({ type: 'viewportNavigationChanged', active });
+                },
+                (speed) => {
+                    this.#emit({ type: 'flySpeedChanged', speed });
+                    this.#emit({ type: 'statusChanged', message: `Fly speed: ${speed.toFixed(1)}` });
+                }
+            );
             const worldLayer = app.scene.layers.getLayerByName('World');
             this.#selectionController = new SelectionController(
                 this.#canvas,
@@ -127,6 +149,9 @@ export class EditorRuntime {
             });
             this.#selectById('box');
         } catch (error) {
+            if (this.#destroyed) {
+                return;
+            }
             this.#emit({
                 type: 'runtimeError',
                 message: error instanceof Error ? error.message : String(error)
@@ -141,6 +166,7 @@ export class EditorRuntime {
     dispatch(command) {
         switch (command.type) {
             case 'selectEntity':
+                this.#selectionController?.invalidatePendingSelection();
                 this.#selectById(command.entityId);
                 break;
             case 'setTransform':
@@ -155,10 +181,8 @@ export class EditorRuntime {
                 this.#emit({ type: 'statusChanged', message: this.#toolStatus(command.tool) });
                 break;
             case 'setCoordinateSpace':
-                if (this.#transformController?.effectiveCoordinateSpace !== 'local' || command.coordinateSpace === 'local') {
-                    this.#transformController?.setCoordinateSpace(command.coordinateSpace);
-                    this.#emit({ type: 'statusChanged', message: `${command.coordinateSpace === 'world' ? 'World' : 'Local'} transform space` });
-                }
+                this.#transformController?.setCoordinateSpace(command.coordinateSpace);
+                this.#emit({ type: 'statusChanged', message: `${command.coordinateSpace === 'world' ? 'World' : 'Local'} transform space` });
                 break;
             case 'setSnapEnabled':
                 this.#transformController?.setSnapEnabled(command.enabled);
@@ -180,6 +204,9 @@ export class EditorRuntime {
                 break;
             case 'frameAll':
                 this.#frameAll();
+                break;
+            case 'setFlySpeed':
+                this.#viewportTools?.setFlySpeed(command.speed);
                 break;
             case 'resetScene':
                 this.#resetScene();
@@ -264,8 +291,8 @@ export class EditorRuntime {
      * @param {string | null} entityId - ID to select.
      */
     #selectById(entityId) {
-        this.#selectedEntityId = entityId;
         this.#viewportTools?.select(this.#scene.getEntity(entityId));
+        this.#selectedEntityId = entityId;
         this.#emit({ type: 'selectionChanged', entityId });
         this.#emit({ type: 'statusChanged', message: entityId ? `Selected ${this.#scene.getEntity(entityId)?.name ?? 'Entity'}` : 'Selection cleared' });
     }
@@ -392,6 +419,7 @@ export class EditorRuntime {
     }
 
     #resetScene() {
+        this.#selectionController?.invalidatePendingSelection();
         for (const [id, transform] of this.#initialTransforms) {
             this.#scene.setTransform(id, transform);
         }
@@ -403,6 +431,7 @@ export class EditorRuntime {
     }
 
     destroy() {
+        this.#destroyed = true;
         this.#selectionController?.destroy();
         this.#selectionController = null;
         this.#viewportTools?.destroy();

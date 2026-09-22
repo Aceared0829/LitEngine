@@ -34,6 +34,58 @@ export class TransformController {
     /** @type {Transform | null} */
     #transformStart = null;
 
+    #canvas;
+
+    #pointerId = null;
+
+    #navigationGesture = false;
+
+    #onPointerDown = (event) => {
+        if (event.pointerType !== 'mouse') {
+            return;
+        }
+        this.#pointerId = event.pointerId;
+        this.#navigationGesture = event.altKey || event.buttons !== 1;
+        if (this.gizmo) {
+            this.gizmo.mouseButtons[0] = !this.#navigationGesture;
+        }
+    };
+
+    #onPointerState = (event) => {
+        if (event.pointerId !== undefined && event.pointerId !== this.#pointerId) {
+            return;
+        }
+        if (this.#pointerId === null) {
+            return;
+        }
+        if (event.buttons !== 1 || event.altKey) {
+            this.#navigationGesture = true;
+            if (this.#transformStart) {
+                this.gizmo?.detach();
+                this.#attach();
+            }
+        }
+        if (this.gizmo) {
+            this.gizmo.mouseButtons[0] = !this.#navigationGesture || event.buttons === 0;
+        }
+        if (event.buttons === 0) {
+            this.#pointerId = null;
+            this.#navigationGesture = false;
+        }
+    };
+
+    #onCancel = () => {
+        if (this.#transformStart) {
+            this.gizmo?.detach();
+            this.#attach();
+        }
+        this.#pointerId = null;
+        this.#navigationGesture = false;
+        if (this.gizmo) {
+            this.gizmo.mouseButtons[0] = true;
+        }
+    };
+
     /** @type {SnapSettings} */
     #snap = {
         enabled: false,
@@ -60,6 +112,8 @@ export class TransformController {
         };
 
         for (const gizmo of Object.values(this.#gizmos)) {
+            gizmo.mouseButtons[1] = false;
+            gizmo.mouseButtons[2] = false;
             gizmo.on('pointer:down', (_x, _y, meshInstance) => {
                 this.#onPointerActivity(Boolean(meshInstance));
             });
@@ -67,11 +121,17 @@ export class TransformController {
             gizmo.on('transform:start', () => {
                 this.#transformStart = this.#getTransform();
             });
+            gizmo.on('transform:move', () => this.#notifyTransform());
             gizmo.on('transform:end', () => this.#commitTransform());
-            gizmo.on('position:update', () => this.#notifyTransform());
-            gizmo.on('rotation:update', () => this.#notifyTransform());
-            gizmo.on('scale:update', () => this.#notifyTransform());
         }
+        this.#canvas = camera.system.app.graphicsDevice.canvas;
+        this.#canvas.addEventListener('pointerdown', this.#onPointerDown, true);
+        this.#canvas.addEventListener('pointermove', this.#onPointerState, true);
+        this.#canvas.addEventListener('mousedown', this.#onPointerState, true);
+        window.addEventListener('mouseup', this.#onPointerState, true);
+        this.#canvas.addEventListener('pointercancel', this.#onCancel);
+        this.#canvas.addEventListener('lostpointercapture', this.#onCancel);
+        window.addEventListener('blur', this.#onCancel);
         this.#applySnap();
     }
 
@@ -196,6 +256,13 @@ export class TransformController {
     }
 
     destroy() {
+        this.#canvas.removeEventListener('pointerdown', this.#onPointerDown, true);
+        this.#canvas.removeEventListener('pointermove', this.#onPointerState, true);
+        this.#canvas.removeEventListener('mousedown', this.#onPointerState, true);
+        window.removeEventListener('mouseup', this.#onPointerState, true);
+        this.#canvas.removeEventListener('pointercancel', this.#onCancel);
+        this.#canvas.removeEventListener('lostpointercapture', this.#onCancel);
+        window.removeEventListener('blur', this.#onCancel);
         this.#onPointerActivity(false);
         for (const gizmo of Object.values(this.#gizmos)) {
             gizmo.destroy();

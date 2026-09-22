@@ -1,64 +1,52 @@
-import { Button, Panel, VectorInput } from '@playcanvas/pcui/react';
-import { useState } from 'react';
+import { Button, Panel } from '@playcanvas/pcui/react';
+import { useRef, useState } from 'react';
 
 import { getSelectedEntity, isFiniteVector3 } from '../domain/editor-reducer.mjs';
 import { jsx } from '../jsx.mjs';
+import { NumberField } from './NumberField.mjs';
 
 /**
- * @param {{ state: import('../domain/editor-reducer.mjs').EditorState, dispatch: (command: import('../contracts/editor-contracts.mjs').EditorCommand) => void, ready: boolean, collapsed: boolean, onToggle: () => void }} props - Inspector props.
+ * @param {{ state: import('../domain/editor-reducer.mjs').EditorState, dispatch: (command: import('../contracts/editor-contracts.mjs').EditorCommand) => void, ready: boolean, collapsed: boolean }} props - Inspector props.
  */
-export function InspectorPanel({ state, dispatch, ready, collapsed, onToggle }) {
+export function InspectorPanel({ state, dispatch, ready, collapsed }) {
     const entity = getSelectedEntity(state);
     const [transformExpanded, setTransformExpanded] = useState(true);
+    const selectionRef = useRef(null);
+    const transformRef = useRef(null);
+    selectionRef.current = entity?.id ?? null;
+    transformRef.current = entity?.transform ?? null;
 
     if (collapsed) {
-        return jsx(
-            Panel,
-            { className: 'editor-panel inspector-panel', headerText: 'Inspector' },
-            jsx('div', { className: 'panel-header-actions' },
-                jsx(Button, {
-                    className: 'panel-action-button',
-                    text: '‹',
-                    tooltip: 'Expand Inspector panel',
-                    onClick: onToggle
-                })
-            )
-        );
+        return jsx(Panel, { class: ['editor-panel', 'inspector-panel'], headerText: 'Inspector' });
     }
 
     if (!entity) {
         return jsx(
             Panel,
-            { className: 'editor-panel inspector-panel', headerText: 'Inspector' },
-            jsx('div', { className: 'panel-header-actions' },
-                jsx(Button, {
-                    className: 'panel-action-button',
-                    text: '›',
-                    tooltip: 'Collapse Inspector panel',
-                    onClick: onToggle
-                })
-            ),
+            { class: ['editor-panel', 'inspector-panel'], headerText: 'Inspector' },
             jsx('p', { className: 'empty-selection' }, 'Select a scene entity to inspect its properties.')
         );
     }
 
     /**
+     * @param {string} entityId - Entity being edited.
      * @param {'position'|'rotation'|'scale'} field - Transform field to update.
      * @param {number[]} value - New vector.
      */
-    const updateTransform = (field, value) => {
+    const updateTransform = (entityId, field, value) => {
+        const current = transformRef.current;
         const vector = value.map(Number);
-        if (!isFiniteVector3(vector)) {
+        if (selectionRef.current !== entityId || !current || !isFiniteVector3(vector) ||
+            vector.every((component, index) => component === current[field][index])) {
             return;
         }
+        const transform = { ...current, [field]: vector };
+        transformRef.current = transform;
         dispatch({
             type: 'setTransform',
-            entityId: entity.id,
+            entityId,
             label: `Edit ${field}`,
-            transform: {
-                ...entity.transform,
-                [field]: vector
-            }
+            transform
         });
     };
 
@@ -69,32 +57,35 @@ export function InspectorPanel({ state, dispatch, ready, collapsed, onToggle }) 
             jsx('span', { className: 'inspector-label' }, label),
             jsx('span', { className: 'inspector-unit' }, unit),
             jsx(Button, {
-                className: 'field-reset-button',
+                class: 'field-reset-button',
                 text: '↺',
                 tooltip: `Reset ${label}`,
                 disabled: !ready,
-                onClick: () => dispatch({ type: 'resetTransformField', entityId: entity.id, field })
+                onClick: () => {
+                    if (selectionRef.current) {
+                        dispatch({ type: 'resetTransformField', entityId: selectionRef.current, field });
+                    }
+                }
             })
         ),
-        jsx(VectorInput, {
-            className: `transform-vector transform-vector-${field}`,
-            dimensions: 3,
-            value: entity.transform[field],
-            onChange: value => updateTransform(field, value)
-        })
+        jsx('div', { className: `transform-vector transform-vector-${field}`, key: entity.id },
+            ...entity.transform[field].map((value, index) => jsx('div', { className: 'pcui-numeric-input', key: index },
+                jsx(NumberField, {
+                    value,
+                    label: `${label} ${'XYZ'[index]}`,
+                    onCommit: (component) => {
+                        const vector = transformRef.current[field].slice();
+                        vector[index] = component;
+                        updateTransform(entity.id, field, vector);
+                    }
+                })
+            ))
+        )
     );
 
     return jsx(
         Panel,
-        { className: 'editor-panel inspector-panel', headerText: 'Inspector' },
-        jsx('div', { className: 'panel-header-actions' },
-            jsx(Button, {
-                className: 'panel-action-button',
-                text: '›',
-                tooltip: 'Collapse Inspector panel',
-                onClick: onToggle
-            })
-        ),
+        { class: ['editor-panel', 'inspector-panel'], headerText: 'Inspector' },
         jsx('section', { className: 'inspector-identity' },
             jsx('div', null,
                 jsx('p', { className: 'inspector-kicker' }, 'Selected Entity'),

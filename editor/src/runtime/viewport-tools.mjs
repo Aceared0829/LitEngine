@@ -1,6 +1,7 @@
-import { CameraControls } from 'playcanvas/scripts/esm/camera-controls.mjs';
 import { Grid } from 'playcanvas/scripts/esm/grid.mjs';
 import { BoundingBox, Color, Layer, OutlineRenderer, Vec3, Vec4, ViewCube } from 'playcanvas';
+
+import { ViewportCameraControls } from './viewport-camera-controls.mjs';
 
 /**
  * @import { AppBase, Entity } from 'playcanvas'
@@ -25,7 +26,7 @@ export class ViewportTools {
     /** @type {Entity} */
     #cameraEntity;
 
-    /** @type {CameraControls} */
+    /** @type {ViewportCameraControls} */
     #cameraControls;
 
     /** @type {OutlineRenderer} */
@@ -48,20 +49,16 @@ export class ViewportTools {
      * @param {Entity} cameraEntity - Viewport camera entity.
      * @param {HTMLCanvasElement} canvas - Viewport canvas.
      * @param {import('./transform-controller.mjs').TransformController} transformController - Gizmo controller.
+     * @param {(active: boolean) => void} onNavigationChange - Reports RMB navigation state.
+     * @param {(speed: number) => void} onFlySpeedChange - Reports editor fly speed adjustments.
      */
-    constructor(app, cameraEntity, canvas, transformController) {
+    constructor(app, cameraEntity, canvas, transformController, onNavigationChange, onFlySpeedChange) {
         this.#app = app;
         this.#cameraEntity = cameraEntity;
         this.#camera = cameraEntity.camera;
         this.#canvas = canvas;
         this.#transformController = transformController;
-
-        this.#cameraControls = /** @type {CameraControls} */ (cameraEntity.script.create(CameraControls));
-        Object.assign(this.#cameraControls, {
-            focusPoint: Vec3.ZERO,
-            rotateDamping: 0,
-            moveDamping: 0
-        });
+        this.#cameraControls = new ViewportCameraControls(app, cameraEntity, canvas, onNavigationChange, onFlySpeedChange);
 
         const outlineLayer = new Layer({ name: 'EditorOutline' });
         app.scene.layers.push(outlineLayer);
@@ -93,6 +90,7 @@ export class ViewportTools {
         this.#outlineRenderer.removeAllEntities();
         if (entity) {
             this.#outlineRenderer.addEntity(entity, Color.WHITE);
+            this.#cameraControls.setPivot(entity.getPosition());
         }
         this.#transformController.select(entity);
     }
@@ -102,6 +100,13 @@ export class ViewportTools {
      */
     setCameraControlEnabled(enabled) {
         this.#cameraControls.enabled = enabled;
+    }
+
+    /**
+     * @param {number} speed - Requested camera movement speed.
+     */
+    setFlySpeed(speed) {
+        this.#cameraControls.setFlySpeed(speed);
     }
 
     /**
@@ -128,7 +133,7 @@ export class ViewportTools {
      * Recalculates the canvas resolution and apparent gizmo size.
      */
     resize() {
-        this.#app.resizeCanvas();
+        this.#app.updateCanvasSize();
         const bounds = this.#canvas.getBoundingClientRect();
         const dimension = this.#camera.horizontalFov ? bounds.width : bounds.height;
         if (dimension > 0 && this.#transformController.gizmo) {
@@ -171,18 +176,21 @@ export class ViewportTools {
         }
 
         const radius = hasBounds ? Math.max(tmpBounds.halfExtents.length(), 0.5) : 1;
-        const verticalFov = this.#camera.horizontalFov ? this.#camera.fov / this.#camera.aspectRatio : this.#camera.fov;
+        const halfFov = this.#camera.fov * Math.PI / 360;
+        const verticalHalfFov = this.#camera.horizontalFov ? Math.atan(Math.tan(halfFov) / this.#camera.aspectRatio) : halfFov;
+        const horizontalHalfFov = Math.atan(Math.tan(verticalHalfFov) * this.#camera.aspectRatio);
         const distance = Math.max(
             MIN_FRAME_DISTANCE,
-            radius * FRAME_MARGIN / Math.tan((verticalFov * Math.PI / 180) * 0.5)
+            radius * FRAME_MARGIN / Math.sin(Math.min(verticalHalfFov, horizontalHalfFov))
         );
-        tmpDirection.copy(this.#cameraEntity.getPosition()).sub(this.#cameraControls.focusPoint).normalize();
+        tmpDirection.copy(this.#cameraEntity.forward).mulScalar(-1);
         tmpPosition.copy(tmpDirection).mulScalar(distance).add(center);
         this.#cameraControls.reset(center, tmpPosition);
         return true;
     }
 
     destroy() {
+        this.#cameraControls.destroy();
         this.#resizeObserver.disconnect();
         this.#viewCube.destroy();
         this.#outlineRenderer.destroy();

@@ -13,6 +13,7 @@ docs-scripts
 examples/.cert
 examples/dist
 editor/dist
+editor/release
 examples/node_modules
 node_modules
 npm-debug.log

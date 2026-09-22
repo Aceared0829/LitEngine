@@ -1,0 +1,30 @@
+appId: com.litengine.editor
+productName: LitEngine Editor
+directories:
+  output: release
+files:
+  - dist/**
+  - electron/**
+  - resources/**
+  - package.json
+  - '!node_modules/**'
+  - '!release/**'
+  - '!src/**'
+  - '!test/**'
+asar: true
+npmRebuild: false
+win:
+  icon: resources/icon.ico
+  target:
+    - target: nsis
+      arch:
+        - x64
+    - target: portable
+      arch:
+        - x64
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: LitEngine Editor

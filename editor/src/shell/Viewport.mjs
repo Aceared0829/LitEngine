@@ -2,6 +2,7 @@ import { Button } from '@playcanvas/pcui/react';
 import { useState } from 'react';
 
 import { jsx } from '../jsx.mjs';
+import { NumberField } from './NumberField.mjs';
 
 /**
  * @param {{ canvasRef: import('react').RefObject<HTMLCanvasElement | null>, state: import('../domain/editor-reducer.mjs').EditorState, dispatch: (command: import('../contracts/editor-contracts.mjs').EditorCommand) => void }} props - Viewport props.
@@ -26,19 +27,28 @@ export function Viewport({ canvasRef, state, dispatch }) {
             jsx('span', { className: 'viewport-separator' }),
             jsx('span', { className: state.snap.enabled ? 'snap-indicator is-enabled' : 'snap-indicator' }, `Snap ${state.snap.enabled ? 'On' : 'Off'}`),
             jsx('span', { className: 'viewport-chrome-spacer' }),
+            jsx('label', { className: 'viewport-speed' }, 'Speed ', jsx(NumberField, {
+                min: 0.1,
+                max: 1000,
+                label: 'Camera fly speed',
+                value: Number(state.flySpeed.toFixed(2)),
+                onCommit: speed => dispatch({ type: 'setFlySpeed', speed })
+            })),
             jsx(Button, {
-                className: 'viewport-help-button',
+                class: 'viewport-help-button',
                 text: '?',
                 tooltip: 'Viewport navigation help',
-                onClick: () => setShowHelp(!showHelp)
+                onClick: () => setShowHelp(current => !current)
             })
         ),
         showHelp && jsx('div', { className: 'viewport-help-card', role: 'dialog', 'aria-label': 'Viewport navigation help' },
-            jsx('strong', null, 'Viewport navigation'),
-            jsx('p', null, 'Click select · drag LMB orbit · MMB / Shift+LMB pan · wheel zoom'),
-            jsx('p', null, 'Hold RMB for fly look · WASD / arrows move · Q/E vertical move'),
-            jsx('p', null, 'Q/W/E/R tools · F frame selected · Shift+F frame all · Esc clear selection')
+            jsx('strong', null, 'UE-style perspective navigation'),
+            jsx('p', null, 'Click LMB to select · drag LMB to move forward/back and turn · drag RMB to look'),
+            jsx('p', null, 'LMB + RMB / MMB drag to pan · wheel to dolly · RMB + wheel to adjust fly speed'),
+            jsx('p', null, 'Hold RMB + WASD / arrows to fly · E/Q move along world up/down (Y-up in PlayCanvas)'),
+            jsx('p', null, 'Alt + LMB orbit · Alt + RMB dolly · Alt + MMB pan · F frame selection'),
+            jsx('p', null, 'Q/W/E/R tools outside navigation · Shift+F frame all · Shift/Ctrl fast/slow fly')
         ),
-        jsx('div', { className: 'viewport-hint' }, 'Click to select · drag to orbit · F to frame')
+        jsx('div', { className: 'viewport-hint' }, 'Hold RMB + WASD to fly · Q/W/E/R tools · F to frame')
     );
 }

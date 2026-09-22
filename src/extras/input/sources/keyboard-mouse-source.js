@@ -2,6 +2,7 @@ import { InputSource } from '../input.js';
 import { movementState } from '../utils.js';
 
 const PASSIVE = /** @type {AddEventListenerOptions & EventListenerOptions} */ ({ passive: false });
+const BUTTON_MASKS = [1, 4, 2];
 const KEY_CODES = /** @type {const} */ ({
     A: 0,
     B: 1,
@@ -80,6 +81,15 @@ class KeyboardMouseSource extends InputSource {
      * @readonly
      */
     static keyCode = KEY_CODES;
+
+    /**
+     * Fired when the held mouse-button mask changes, including chorded presses and releases.
+     * The callback receives the DOM buttons bitmask and the originating event, or undefined
+     * for the event when focus loss clears the buttons.
+     *
+     * @event
+     */
+    static EVENT_BUTTONSCHANGE = 'buttons:change';
 
     /** @private */
     _pointerId = -1;
@@ -161,6 +171,8 @@ class KeyboardMouseSource extends InputSource {
         this._onContextMenu = this._onContextMenu.bind(this);
         this._onKeyDown = this._onKeyDown.bind(this);
         this._onKeyUp = this._onKeyUp.bind(this);
+        this._onMouseButtons = this._onMouseButtons.bind(this);
+        this._onBlur = this._onBlur.bind(this);
     }
 
     /**
@@ -177,11 +189,11 @@ class KeyboardMouseSource extends InputSource {
      * @private
      */
     _onPointerDown(event) {
-        this._movementState.down(event);
-
-        if (event.pointerType !== 'mouse') {
+        if (event.pointerType !== 'mouse' || (this._pointerId !== -1 && this._pointerId !== event.pointerId)) {
             return;
         }
+        this._pointerId = event.pointerId;
+        this._movementState.down(event);
         if (this._pointerLock) {
             if (document.pointerLockElement !== this._element) {
                 this._element?.requestPointerLock();
@@ -190,14 +202,7 @@ class KeyboardMouseSource extends InputSource {
             this._element?.setPointerCapture(event.pointerId);
         }
 
-        this._clearButtons();
-        this._button[event.button] = 1;
-        this.deltas.button.append(this._button);
-
-        if (this._pointerId !== -1) {
-            return;
-        }
-        this._pointerId = event.pointerId;
+        this._updateButtons(event.buttons, event);
     }
 
     /**
@@ -226,6 +231,7 @@ class KeyboardMouseSource extends InputSource {
             }
         }
 
+        this._updateButtons(event.buttons, event);
         this.deltas.mouse.append([movementX, movementY]);
     }
 
@@ -234,22 +240,48 @@ class KeyboardMouseSource extends InputSource {
      * @private
      */
     _onPointerUp(event) {
+        if (event.pointerType !== 'mouse' || event.pointerId !== this._pointerId) {
+            return;
+        }
+        if (event.type === 'pointerleave' && (this._pointerLock || this._element?.hasPointerCapture(event.pointerId))) {
+            return;
+        }
         this._movementState.up(event);
-
-        if (event.pointerType !== 'mouse') {
-            return;
-        }
-        if (!this._pointerLock) {
-            this._element?.releasePointerCapture(event.pointerId);
-        }
-
-        this._clearButtons();
-        this.deltas.button.append(this._button);
-
-        if (this._pointerId !== event.pointerId) {
-            return;
-        }
         this._pointerId = -1;
+        this._updateButtons(0, event);
+        if (!this._pointerLock && this._element?.hasPointerCapture(event.pointerId)) {
+            this._element.releasePointerCapture(event.pointerId);
+        }
+    }
+
+    /**
+     * Mouse events also report chord changes without a pointerdown or pointerup.
+     *
+     * @param {MouseEvent} event - Mouse button transition.
+     * @private
+     */
+    _onMouseButtons(event) {
+        if (this._pointerId !== -1) {
+            this._updateButtons(event.buttons, event);
+        }
+    }
+
+    /**
+     * Clears held inputs on focus loss so keys cannot remain latched.
+     *
+     * @private
+     */
+    _onBlur() {
+        const pointerId = this._pointerId;
+        this._pointerId = -1;
+        this._movementState = movementState();
+        this._keyNow.fill(0);
+        this._updateButtons(0);
+        this.deltas.mouse.read();
+        this.deltas.wheel.read();
+        if (!this._pointerLock && this._element?.hasPointerCapture(pointerId)) {
+            this._element.releasePointerCapture(pointerId);
+        }
     }
 
     /**
@@ -281,14 +313,21 @@ class KeyboardMouseSource extends InputSource {
         this._setKey(event.code, 0);
     }
 
-    /** @private */
-    _clearButtons() {
-        for (let i = 0; i < this._button.length; i++) {
-            if (this._button[i] === 1) {
-                this._button[i] = -1;
-                continue;
-            }
-            this._button[i] = 0;
+    /**
+     * @param {number} buttons - DOM held-button bitmask (left, right, middle).
+     * @param {MouseEvent | PointerEvent} [event] - Originating input event.
+     * @private
+     */
+    _updateButtons(buttons, event) {
+        const delta = BUTTON_MASKS.map((mask, index) => {
+            const held = +(!!(buttons & mask));
+            const change = held - this._button[index];
+            this._button[index] = held;
+            return change;
+        });
+        if (delta.some(value => value !== 0)) {
+            this.deltas.button.append(delta);
+            this.fire(KeyboardMouseSource.EVENT_BUTTONSCHANGE, buttons, event);
         }
     }
 
@@ -319,6 +358,9 @@ class KeyboardMouseSource extends InputSource {
         this._element.addEventListener('pointerleave', this._onPointerUp);
         this._element.addEventListener('lostpointercapture', this._onPointerUp);
         this._element.addEventListener('contextmenu', this._onContextMenu);
+        this._element.addEventListener('mousedown', this._onMouseButtons);
+        window.addEventListener('mouseup', this._onMouseButtons);
+        window.addEventListener('blur', this._onBlur);
 
         window.addEventListener('keydown', this._onKeyDown, false);
         window.addEventListener('keyup', this._onKeyUp, false);
@@ -336,6 +378,10 @@ class KeyboardMouseSource extends InputSource {
         this._element.removeEventListener('pointerleave', this._onPointerUp);
         this._element.removeEventListener('lostpointercapture', this._onPointerUp);
         this._element.removeEventListener('contextmenu', this._onContextMenu);
+        this._element.removeEventListener('mousedown', this._onMouseButtons);
+        window.removeEventListener('mouseup', this._onMouseButtons);
+        window.removeEventListener('blur', this._onBlur);
+        this._onBlur();
 
         window.removeEventListener('keydown', this._onKeyDown, false);
         window.removeEventListener('keyup', this._onKeyUp, false);

@@ -101,7 +101,7 @@ input:focus-visible {
 }
 
 .editor-toolbar .pcui-button.toolbar-button,
-.pcui-button.panel-action-button,
+.dock-toggle,
 .pcui-button.field-reset-button,
 .pcui-button.viewport-help-button {
     min-width: 0;
@@ -128,7 +128,7 @@ input:focus-visible {
 }
 
 .editor-toolbar .pcui-button.toolbar-button:hover:not(.pcui-button-disabled),
-.pcui-button.panel-action-button:hover,
+.dock-toggle:hover,
 .pcui-button.field-reset-button:hover,
 .pcui-button.viewport-help-button:hover,
 .editor-toolbar .pcui-button.toolbar-button-active {
@@ -194,22 +194,33 @@ input:focus-visible {
     letter-spacing: 0.01em;
 }
 
-.panel-header-actions {
+.dock-toggle {
     position: absolute;
-    z-index: 2;
-    top: 3px;
+    z-index: 11;
+    top: 4px;
     right: 5px;
-}
-
-.pcui-button.panel-action-button {
     width: 25px;
     height: 25px;
     padding: 0;
-    border-color: transparent;
-    background: transparent;
-    color: #aab6c2;
+    background: #222a32;
+    color: #dce3ea;
     font-size: 18px;
     line-height: 1;
+    cursor: pointer;
+}
+
+.editor-sidebar .editor-panel > .pcui-panel-header {
+    padding-right: 36px;
+}
+
+.hierarchy-collapsed .editor-hierarchy .editor-panel,
+.inspector-collapsed .editor-inspector .editor-panel {
+    display: none;
+}
+
+.hierarchy-collapsed .editor-hierarchy .dock-toggle,
+.inspector-collapsed .editor-inspector .dock-toggle {
+    right: 4px;
 }
 
 .dock-resize-handle {
@@ -409,6 +420,23 @@ input:focus-visible {
     text-transform: capitalize;
 }
 
+.viewport-speed {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    white-space: nowrap;
+}
+
+.viewport-speed input {
+    width: 58px;
+    border: 1px solid #435667;
+    border-radius: 3px;
+    padding: 2px 4px;
+    background: #191f26;
+    color: #dce3ea;
+    font: inherit;
+}
+
 .viewport-mode {
     color: #f1f5f8;
     font-weight: 700;
@@ -590,9 +618,28 @@ input:focus-visible {
     color: #92a3b2;
 }
 
-.transform-vector.pcui-vector-input {
+.transform-vector {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 5px;
     min-width: 0;
     width: 100%;
+}
+
+.transform-vector .pcui-numeric-input {
+    min-width: 0;
+}
+
+.transform-vector input {
+    box-sizing: border-box;
+    width: 100%;
+    min-width: 0;
+    height: 28px;
+    border: 1px solid #435667;
+    border-radius: 3px;
+    padding: 3px 6px;
+    background: #202b33;
+    font: inherit;
 }
 
 .transform-vector .pcui-numeric-input:nth-child(1) input {
@@ -676,16 +723,20 @@ input:focus-visible {
 }
 
 @media (max-width: 760px) {
-    .editor-app,
-    .editor-app.hierarchy-collapsed,
-    .editor-app.inspector-collapsed,
-    .editor-app.hierarchy-collapsed.inspector-collapsed {
-        grid-template-columns: 34px minmax(0, 1fr) 34px;
+    .editor-app {
+        grid-template-columns: min(var(--hierarchy-width), 32vw) minmax(0, 1fr) min(var(--inspector-width), 32vw);
     }
 
-    .editor-hierarchy:not(.hierarchy-collapsed),
-    .editor-inspector:not(.inspector-collapsed) {
-        min-width: 0;
+    .editor-app.hierarchy-collapsed {
+        grid-template-columns: 34px minmax(0, 1fr) min(var(--inspector-width), 32vw);
+    }
+
+    .editor-app.inspector-collapsed {
+        grid-template-columns: min(var(--hierarchy-width), 32vw) minmax(0, 1fr) 34px;
+    }
+
+    .editor-app.hierarchy-collapsed.inspector-collapsed {
+        grid-template-columns: 34px minmax(0, 1fr) 34px;
     }
 
     .editor-toolbar {

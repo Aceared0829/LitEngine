@@ -2,8 +2,10 @@ import { useEffect, useRef, useState } from 'react';
 
 import { EditorController } from '../bridge/editor-controller.mjs';
 import { initialEditorState } from '../domain/editor-reducer.mjs';
+import { onDesktopEditorCommand } from '../platform/desktop-api.mjs';
 import { jsx } from '../jsx.mjs';
 import { DockResizeHandle } from './DockResizeHandle.mjs';
+import { DockToggle } from './DockToggle.mjs';
 import { HierarchyPanel } from './HierarchyPanel.mjs';
 import { InspectorPanel } from './InspectorPanel.mjs';
 import { StatusBar } from './StatusBar.mjs';
@@ -41,6 +43,8 @@ export function EditorApp() {
     const dispatch = command => controllerRef.current?.dispatch(command);
     const ready = state.runtimeStatus === 'ready';
 
+    useEffect(() => onDesktopEditorCommand(dispatch), [dispatch]);
+
     return jsx(
         'div',
         {
@@ -51,7 +55,7 @@ export function EditorApp() {
                 '--inspector-width': `${layout.inspectorWidth}px`
             }
         },
-        jsx(Toolbar, { state, dispatch, ready }),
+        jsx(Toolbar, { state, dispatch, ready, isNavigationActive: () => controllerRef.current?.getState().viewportNavigationActive ?? false }),
         jsx(
             'aside',
             { className: 'editor-sidebar editor-hierarchy', 'aria-label': 'Scene panel' },
@@ -59,6 +63,10 @@ export function EditorApp() {
                 state,
                 dispatch,
                 ready,
+                collapsed: layout.hierarchyCollapsed
+            }),
+            jsx(DockToggle, {
+                dock: 'hierarchy',
                 collapsed: layout.hierarchyCollapsed,
                 onToggle: () => updateLayout({ hierarchyCollapsed: !layout.hierarchyCollapsed })
             }),
@@ -76,6 +84,10 @@ export function EditorApp() {
                 state,
                 dispatch,
                 ready,
+                collapsed: layout.inspectorCollapsed
+            }),
+            jsx(DockToggle, {
+                dock: 'inspector',
                 collapsed: layout.inspectorCollapsed,
                 onToggle: () => updateLayout({ inspectorCollapsed: !layout.inspectorCollapsed })
             }),

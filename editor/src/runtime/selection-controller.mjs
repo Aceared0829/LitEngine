@@ -33,16 +33,55 @@ export class SelectionController {
 
     #pointerDown = new Vec2();
 
+    /** @type {number | null} */
+    #pointerId = null;
+
+    #gizmoPointerDown = false;
+
     #requestId = 0;
 
     /** @type {(event: PointerEvent) => void} */
     #onPointerDown = (event) => {
+        this.#requestId++;
+        if (event.button !== 0 || event.altKey) {
+            this.#pointerId = null;
+            this.#gizmoPointerDown = false;
+            return;
+        }
+        this.#pointerId = event.pointerId;
+        this.#gizmoPointerDown = this.#isInteractionBlocked();
         this.#pointerDown.set(event.clientX, event.clientY);
+    };
+
+    /** @type {(event: PointerEvent) => void} */
+    #onPointerMove = (event) => {
+        if (event.pointerId === this.#pointerId &&
+            (event.altKey || event.buttons !== 1 ||
+             Math.abs(event.clientX - this.#pointerDown.x) > CLICK_TOLERANCE ||
+             Math.abs(event.clientY - this.#pointerDown.y) > CLICK_TOLERANCE)) {
+            this.invalidatePendingSelection();
+        }
+    };
+
+    /** @type {(event: PointerEvent) => void} */
+    #onPointerCancel = (event) => {
+        if (event.pointerId === this.#pointerId) {
+            this.#pointerId = null;
+            this.#gizmoPointerDown = false;
+            this.#requestId++;
+        }
     };
 
     /** @type {(event: PointerEvent) => Promise<void>} */
     #onPointerUp = async (event) => {
-        if (this.#isInteractionBlocked() ||
+        if (event.button !== 0 || event.pointerId !== this.#pointerId) {
+            return;
+        }
+        this.#pointerId = null;
+        const gizmoPointerDown = this.#gizmoPointerDown;
+        this.#gizmoPointerDown = false;
+
+        if (gizmoPointerDown || this.#isInteractionBlocked() ||
             Math.abs(event.clientX - this.#pointerDown.x) > CLICK_TOLERANCE ||
             Math.abs(event.clientY - this.#pointerDown.y) > CLICK_TOLERANCE) {
             return;
@@ -59,7 +98,7 @@ export class SelectionController {
             2
         );
 
-        if (requestId !== this.#requestId) {
+        if (requestId !== this.#requestId || this.#isInteractionBlocked()) {
             return;
         }
         this.#onSelection(/** @type {Entity | null} */ (selection[0]?.node ?? null));
@@ -72,24 +111,38 @@ export class SelectionController {
      * @param {Layer[]} layers - Pickable scene layers.
      * @param {(entity: Entity | null) => void} onSelection - Selection callback.
      * @param {() => boolean} isInteractionBlocked - Whether a gizmo drag is active.
+     * @param {Picker} [picker] - Picker supplied by a test, if needed.
      */
-    constructor(canvas, app, camera, layers, onSelection, isInteractionBlocked) {
+    constructor(canvas, app, camera, layers, onSelection, isInteractionBlocked, picker) {
         this.#canvas = canvas;
         this.#app = app;
         this.#camera = camera;
         this.#layers = layers;
         this.#onSelection = onSelection;
         this.#isInteractionBlocked = isInteractionBlocked;
-        this.#picker = new Picker(app, canvas.clientWidth, canvas.clientHeight);
+        this.#picker = picker ?? new Picker(app, canvas.clientWidth, canvas.clientHeight);
 
         canvas.addEventListener('pointerdown', this.#onPointerDown);
+        canvas.addEventListener('pointermove', this.#onPointerMove);
         canvas.addEventListener('pointerup', this.#onPointerUp);
+        canvas.addEventListener('pointercancel', this.#onPointerCancel);
+    }
+
+    /**
+     * Invalidates an outstanding GPU pick when selection changes elsewhere.
+     */
+    invalidatePendingSelection() {
+        this.#requestId++;
+        this.#pointerId = null;
+        this.#gizmoPointerDown = false;
     }
 
     destroy() {
         this.#requestId++;
         this.#canvas.removeEventListener('pointerdown', this.#onPointerDown);
+        this.#canvas.removeEventListener('pointermove', this.#onPointerMove);
         this.#canvas.removeEventListener('pointerup', this.#onPointerUp);
+        this.#canvas.removeEventListener('pointercancel', this.#onPointerCancel);
         this.#picker.destroy();
     }
 }
