@@ -13,10 +13,10 @@
  */
 
 /**
- * @param {(command: DesktopEditorCommand) => void} callback - Handler for native-menu editor commands.
+ * @param {(command: { type: DesktopEditorCommand }) => void} callback - Handler for typed editor commands.
  * @returns {() => void} Unsubscribe callback.
  */
 export const onDesktopEditorCommand = (callback) => {
     const bridge = /** @type {DesktopBridge | undefined} */ (globalThis.litEngineDesktop);
-    return bridge?.onEditorCommand(callback) ?? (() => {});
+    return bridge?.onEditorCommand(type => callback({ type })) ?? (() => {});
 };
