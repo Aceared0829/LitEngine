@@ -56,11 +56,17 @@ export class ViewportTools {
 
     #flySpeed;
 
+    /** @type {number | null} */
+    #navigationPointerId = null;
+
     /** @type {(event: PointerEvent) => void} */
     #onPointerDown;
 
     /** @type {(event: PointerEvent) => void} */
     #onPointerUp;
+
+    /** @type {(event: PointerEvent) => void} */
+    #onPointerCancel;
 
     /** @type {(event: WheelEvent) => void} */
     #onWheel;
@@ -96,20 +102,25 @@ export class ViewportTools {
         this.#flySpeedRatios = getFlySpeedRatios(this.#cameraControls);
 
         this.#onPointerDown = (event) => {
-            if (event.button !== 2) {
+            if (event.button !== 2 || this.#navigationPointerId !== null) {
                 return;
             }
+            this.#navigationPointerId = event.pointerId;
             this.#cameraControls.enableFly = true;
             this.#onNavigationChange(true);
         };
         this.#onPointerUp = (event) => {
-            if (event.button !== 2) {
-                return;
+            if (event.button === 2 && event.pointerId === this.#navigationPointerId) {
+                this.#endNavigation();
             }
-            this.#endNavigation();
+        };
+        this.#onPointerCancel = (event) => {
+            if (event.pointerId === this.#navigationPointerId) {
+                this.#endNavigation();
+            }
         };
         this.#onWheel = (event) => {
-            if (!(event.buttons & 2)) {
+            if (this.#navigationPointerId === null || !(event.buttons & 2)) {
                 return;
             }
 
@@ -122,6 +133,8 @@ export class ViewportTools {
         this.#onWindowBlur = () => this.#endNavigation();
         canvas.addEventListener('pointerdown', this.#onPointerDown, true);
         window.addEventListener('pointerup', this.#onPointerUp, true);
+        canvas.addEventListener('pointercancel', this.#onPointerCancel);
+        canvas.addEventListener('lostpointercapture', this.#onPointerCancel);
         canvas.addEventListener('wheel', this.#onWheel, { capture: true, passive: false });
         window.addEventListener('blur', this.#onWindowBlur);
 
@@ -190,7 +203,7 @@ export class ViewportTools {
      * Recalculates the canvas resolution and apparent gizmo size.
      */
     resize() {
-        this.#app.resizeCanvas();
+        this.#app.updateCanvasSize();
         const bounds = this.#canvas.getBoundingClientRect();
         const dimension = this.#camera.horizontalFov ? bounds.width : bounds.height;
         if (dimension > 0 && this.#transformController.gizmo) {
@@ -245,6 +258,10 @@ export class ViewportTools {
     }
 
     #endNavigation() {
+        if (this.#navigationPointerId === null) {
+            return;
+        }
+        this.#navigationPointerId = null;
         this.#cameraControls.enableFly = false;
         this.#onNavigationChange(false);
     }
@@ -253,6 +270,8 @@ export class ViewportTools {
         this.#endNavigation();
         this.#canvas.removeEventListener('pointerdown', this.#onPointerDown, true);
         window.removeEventListener('pointerup', this.#onPointerUp, true);
+        this.#canvas.removeEventListener('pointercancel', this.#onPointerCancel);
+        this.#canvas.removeEventListener('lostpointercapture', this.#onPointerCancel);
         this.#canvas.removeEventListener('wheel', this.#onWheel, true);
         window.removeEventListener('blur', this.#onWindowBlur);
         this.#resizeObserver.disconnect();

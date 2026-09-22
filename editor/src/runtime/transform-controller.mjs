@@ -60,6 +60,8 @@ export class TransformController {
         };
 
         for (const gizmo of Object.values(this.#gizmos)) {
+            gizmo.mouseButtons[1] = false;
+            gizmo.mouseButtons[2] = false;
             gizmo.on('pointer:down', (_x, _y, meshInstance) => {
                 this.#onPointerActivity(Boolean(meshInstance));
             });
@@ -67,10 +69,8 @@ export class TransformController {
             gizmo.on('transform:start', () => {
                 this.#transformStart = this.#getTransform();
             });
+            gizmo.on('transform:move', () => this.#notifyTransform());
             gizmo.on('transform:end', () => this.#commitTransform());
-            gizmo.on('position:update', () => this.#notifyTransform());
-            gizmo.on('rotation:update', () => this.#notifyTransform());
-            gizmo.on('scale:update', () => this.#notifyTransform());
         }
         this.#applySnap();
     }
