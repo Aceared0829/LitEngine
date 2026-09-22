@@ -85,7 +85,7 @@ export function Toolbar({ state, dispatch, ready }) {
     }, [dispatch, ready, state.activeTool, state.coordinateSpace, state.viewportNavigationActive]);
 
     const toolButton = (tool, label, shortcut, title) => jsx(Button, {
-        className: `toolbar-button toolbar-tool ${state.activeTool === tool ? 'toolbar-button-active' : ''}`,
+        class: ['toolbar-button', 'toolbar-tool', ...(state.activeTool === tool ? ['toolbar-button-active'] : [])],
         text: `${label} ${shortcut}`,
         tooltip: title,
         disabled: !ready,
@@ -97,18 +97,18 @@ export function Toolbar({ state, dispatch, ready }) {
 
     return jsx(
         Container,
-        { className: 'editor-toolbar' },
+        { class: ['editor-toolbar'] },
         jsx('div', { className: 'editor-brand' }, jsx('strong', null, 'LitEngine'), jsx('span', null, 'EDITOR')),
         jsx('div', { className: 'toolbar-divider' }),
         jsx(Button, {
-            className: 'toolbar-button toolbar-icon',
+            class: ['toolbar-button', 'toolbar-icon'],
             text: '↶',
             tooltip: state.history.undoLabel ? `Undo ${state.history.undoLabel} (Ctrl+Z)` : 'Nothing to undo',
             disabled: !ready || !state.history.canUndo,
             onClick: () => dispatch({ type: 'undo' })
         }),
         jsx(Button, {
-            className: 'toolbar-button toolbar-icon',
+            class: ['toolbar-button', 'toolbar-icon'],
             text: '↷',
             tooltip: state.history.redoLabel ? `Redo ${state.history.redoLabel} (Ctrl+Shift+Z)` : 'Nothing to redo',
             disabled: !ready || !state.history.canRedo,
@@ -121,7 +121,7 @@ export function Toolbar({ state, dispatch, ready }) {
         toolButton('scale', 'Scale', 'R', 'Scale tool (R / 3)'),
         jsx('div', { className: 'toolbar-divider' }),
         jsx(Button, {
-            className: 'toolbar-button coordinate-space',
+            class: ['toolbar-button', 'coordinate-space'],
             text: effectiveSpace === 'world' ? 'World' : 'Local',
             tooltip: state.activeTool === 'scale' ? 'Scale uses local space' : 'Toggle world/local transform space (X)',
             disabled: !ready || state.activeTool === 'scale',
@@ -131,7 +131,7 @@ export function Toolbar({ state, dispatch, ready }) {
             })
         }),
         jsx(Button, {
-            className: `toolbar-button snap-button ${state.snap.enabled ? 'toolbar-button-active' : ''}`,
+            class: ['toolbar-button', 'snap-button', ...(state.snap.enabled ? ['toolbar-button-active'] : [])],
             text: `Snap ${state.snap.enabled ? 'On' : 'Off'} · ${increment}`,
             tooltip: `Toggle transform snap (${activeSnapTool} increment ${increment})`,
             disabled: !ready,
@@ -139,21 +139,21 @@ export function Toolbar({ state, dispatch, ready }) {
         }),
         jsx('div', { className: 'toolbar-spacer' }),
         jsx(Button, {
-            className: 'toolbar-button',
+            class: 'toolbar-button',
             text: 'Frame · F',
             tooltip: 'Frame selection (F), or frame all (Shift+F)',
             disabled: !ready,
             onClick: () => dispatch({ type: 'focusSelected' })
         }),
         jsx(Button, {
-            className: 'toolbar-button',
+            class: 'toolbar-button',
             text: 'Frame All',
             tooltip: 'Frame all scene entities (Shift+F)',
             disabled: !ready,
             onClick: () => dispatch({ type: 'frameAll' })
         }),
         jsx(Button, {
-            className: 'toolbar-button toolbar-danger',
+            class: ['toolbar-button', 'toolbar-danger'],
             text: 'Reset Scene',
             tooltip: 'Restore the demonstration scene',
             disabled: !ready,

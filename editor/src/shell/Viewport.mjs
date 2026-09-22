@@ -27,7 +27,7 @@ export function Viewport({ canvasRef, state, dispatch }) {
             jsx('span', { className: state.snap.enabled ? 'snap-indicator is-enabled' : 'snap-indicator' }, `Snap ${state.snap.enabled ? 'On' : 'Off'}`),
             jsx('span', { className: 'viewport-chrome-spacer' }),
             jsx(Button, {
-                className: 'viewport-help-button',
+                class: 'viewport-help-button',
                 text: '?',
                 tooltip: 'Viewport navigation help',
                 onClick: () => setShowHelp(!showHelp)

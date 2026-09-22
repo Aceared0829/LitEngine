@@ -1,8 +1,32 @@
 import { Button, Panel, VectorInput } from '@playcanvas/pcui/react';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 
 import { getSelectedEntity, isFiniteVector3 } from '../domain/editor-reducer.mjs';
 import { jsx } from '../jsx.mjs';
+
+/**
+ * PCUI's React VectorInput emits change when React sets value, and retains its first onChange.
+ * Only forward user edits, using the latest callback after the selected entity changes.
+ *
+ * @param {{ field: string, value: number[], onChange: (value: number[]) => void }} props - Vector field props.
+ */
+function TransformVectorInput({ field, value, onChange }) {
+    const inputRef = useRef(null);
+    const onChangeRef = useRef(onChange);
+    onChangeRef.current = onChange;
+
+    return jsx(VectorInput, {
+        ref: inputRef,
+        class: ['transform-vector', `transform-vector-${field}`],
+        dimensions: 3,
+        value,
+        onChange: (nextValue) => {
+            if (!inputRef.current?.element?._suppressChange) {
+                onChangeRef.current(nextValue);
+            }
+        }
+    });
+}
 
 /**
  * @param {{ state: import('../domain/editor-reducer.mjs').EditorState, dispatch: (command: import('../contracts/editor-contracts.mjs').EditorCommand) => void, ready: boolean, collapsed: boolean, onToggle: () => void }} props - Inspector props.
@@ -10,14 +34,18 @@ import { jsx } from '../jsx.mjs';
 export function InspectorPanel({ state, dispatch, ready, collapsed, onToggle }) {
     const entity = getSelectedEntity(state);
     const [transformExpanded, setTransformExpanded] = useState(true);
+    const selectionRef = useRef(null);
+    const transformRef = useRef(null);
+    selectionRef.current = entity?.id ?? null;
+    transformRef.current = entity?.transform ?? null;
 
     if (collapsed) {
         return jsx(
             Panel,
-            { className: 'editor-panel inspector-panel', headerText: 'Inspector' },
+            { class: ['editor-panel', 'inspector-panel'], headerText: 'Inspector' },
             jsx('div', { className: 'panel-header-actions' },
                 jsx(Button, {
-                    className: 'panel-action-button',
+                    class: 'panel-action-button',
                     text: '‹',
                     tooltip: 'Expand Inspector panel',
                     onClick: onToggle
@@ -29,10 +57,10 @@ export function InspectorPanel({ state, dispatch, ready, collapsed, onToggle }) 
     if (!entity) {
         return jsx(
             Panel,
-            { className: 'editor-panel inspector-panel', headerText: 'Inspector' },
+            { class: ['editor-panel', 'inspector-panel'], headerText: 'Inspector' },
             jsx('div', { className: 'panel-header-actions' },
                 jsx(Button, {
-                    className: 'panel-action-button',
+                    class: 'panel-action-button',
                     text: '›',
                     tooltip: 'Collapse Inspector panel',
                     onClick: onToggle
@@ -43,22 +71,24 @@ export function InspectorPanel({ state, dispatch, ready, collapsed, onToggle }) 
     }
 
     /**
+     * @param {string} entityId - Entity being edited.
      * @param {'position'|'rotation'|'scale'} field - Transform field to update.
      * @param {number[]} value - New vector.
      */
-    const updateTransform = (field, value) => {
+    const updateTransform = (entityId, field, value) => {
+        const current = transformRef.current;
         const vector = value.map(Number);
-        if (!isFiniteVector3(vector)) {
+        if (selectionRef.current !== entityId || !current || !isFiniteVector3(vector) ||
+            vector.every((component, index) => component === current[field][index])) {
             return;
         }
+        const transform = { ...current, [field]: vector };
+        transformRef.current = transform;
         dispatch({
             type: 'setTransform',
-            entityId: entity.id,
+            entityId,
             label: `Edit ${field}`,
-            transform: {
-                ...entity.transform,
-                [field]: vector
-            }
+            transform
         });
     };
 
@@ -69,27 +99,30 @@ export function InspectorPanel({ state, dispatch, ready, collapsed, onToggle }) 
             jsx('span', { className: 'inspector-label' }, label),
             jsx('span', { className: 'inspector-unit' }, unit),
             jsx(Button, {
-                className: 'field-reset-button',
+                class: 'field-reset-button',
                 text: '↺',
                 tooltip: `Reset ${label}`,
                 disabled: !ready,
-                onClick: () => dispatch({ type: 'resetTransformField', entityId: entity.id, field })
+                onClick: () => {
+                    if (selectionRef.current) {
+                        dispatch({ type: 'resetTransformField', entityId: selectionRef.current, field });
+                    }
+                }
             })
         ),
-        jsx(VectorInput, {
-            className: `transform-vector transform-vector-${field}`,
-            dimensions: 3,
+        jsx(TransformVectorInput, {
+            field,
             value: entity.transform[field],
-            onChange: value => updateTransform(field, value)
+            onChange: value => updateTransform(entity.id, field, value)
         })
     );
 
     return jsx(
         Panel,
-        { className: 'editor-panel inspector-panel', headerText: 'Inspector' },
+        { class: ['editor-panel', 'inspector-panel'], headerText: 'Inspector' },
         jsx('div', { className: 'panel-header-actions' },
             jsx(Button, {
-                className: 'panel-action-button',
+                class: 'panel-action-button',
                 text: '›',
                 tooltip: 'Collapse Inspector panel',
                 onClick: onToggle

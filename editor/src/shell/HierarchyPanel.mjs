@@ -24,10 +24,10 @@ export function HierarchyPanel({ state, dispatch, ready, collapsed, onToggle }) 
 
     return jsx(
         Panel,
-        { className: 'editor-panel hierarchy-panel', headerText: collapsed ? 'Scene' : 'Scene Outliner' },
+        { class: ['editor-panel', 'hierarchy-panel'], headerText: collapsed ? 'Scene' : 'Scene Outliner' },
         jsx('div', { className: 'panel-header-actions' },
             jsx(Button, {
-                className: 'panel-action-button',
+                class: 'panel-action-button',
                 text: collapsed ? '›' : '‹',
                 tooltip: collapsed ? 'Expand Scene panel' : 'Collapse Scene panel',
                 onClick: onToggle
@@ -41,7 +41,7 @@ export function HierarchyPanel({ state, dispatch, ready, collapsed, onToggle }) 
                     onChange: setQuery
                 }),
                 query && jsx(Button, {
-                    className: 'scene-search-clear',
+                    class: 'scene-search-clear',
                     text: '×',
                     tooltip: 'Clear scene search',
                     onClick: () => setQuery('')
