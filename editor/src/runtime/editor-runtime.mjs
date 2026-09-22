@@ -4,7 +4,6 @@ import {
     CameraComponentSystem,
     Color,
     Entity,
-    FILLMODE_FILL_WINDOW,
     LightComponentSystem,
     RenderComponentSystem,
     RESOLUTION_AUTO,
@@ -90,7 +89,6 @@ export class EditorRuntime {
 
             const app = new AppBase(this.#canvas);
             app.init(options);
-            app.setCanvasFillMode(FILLMODE_FILL_WINDOW);
             app.setCanvasResolution(RESOLUTION_AUTO);
             app.scene.ambientLight = new Color(0.2, 0.2, 0.2);
             this.#app = app;
@@ -102,6 +100,9 @@ export class EditorRuntime {
                 camera.camera,
                 (active) => {
                     this.#gizmoActive = active;
+                    if (active) {
+                        this.#selectionController?.invalidatePendingSelection();
+                    }
                     this.#viewportTools?.setCameraControlEnabled(!active);
                 },
                 transform => this.#emitTransformPreview(transform),
@@ -148,6 +149,7 @@ export class EditorRuntime {
     dispatch(command) {
         switch (command.type) {
             case 'selectEntity':
+                this.#selectionController?.invalidatePendingSelection();
                 this.#selectById(command.entityId);
                 break;
             case 'setTransform':
@@ -399,6 +401,7 @@ export class EditorRuntime {
     }
 
     #resetScene() {
+        this.#selectionController?.invalidatePendingSelection();
         for (const [id, transform] of this.#initialTransforms) {
             this.#scene.setTransform(id, transform);
         }
