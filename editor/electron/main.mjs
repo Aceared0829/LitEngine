@@ -45,7 +45,7 @@ const createWindow = async () => {
         show: false,
         backgroundColor: '#111418',
         webPreferences: {
-            preload: path.join(__dirname, 'preload.mjs'),
+            preload: path.join(__dirname, 'preload.cjs'),
             contextIsolation: true,
             nodeIntegration: false,
             sandbox: true,
