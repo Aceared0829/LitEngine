@@ -3,6 +3,7 @@ import { Grid } from 'playcanvas/scripts/esm/grid.mjs';
 import { BoundingBox, Color, Layer, OutlineRenderer, Vec3, Vec4, ViewCube } from 'playcanvas';
 
 import { adjustFlySpeed, getFlySpeedRatios, getWheelSteps, setFlySpeed } from './fly-speed.mjs';
+import { releasedNavigationButton } from './navigation-pointer.mjs';
 
 /**
  * @import { AppBase, Entity } from 'playcanvas'
@@ -63,6 +64,9 @@ export class ViewportTools {
     #onPointerDown;
 
     /** @type {(event: PointerEvent) => void} */
+    #onPointerMove;
+
+    /** @type {(event: PointerEvent) => void} */
     #onPointerUp;
 
     /** @type {(event: PointerEvent) => void} */
@@ -109,8 +113,13 @@ export class ViewportTools {
             this.#cameraControls.enableFly = true;
             this.#onNavigationChange(true);
         };
+        this.#onPointerMove = (event) => {
+            if (releasedNavigationButton(this.#navigationPointerId, event)) {
+                this.#endNavigation();
+            }
+        };
         this.#onPointerUp = (event) => {
-            if (event.button === 2 && event.pointerId === this.#navigationPointerId) {
+            if (releasedNavigationButton(this.#navigationPointerId, event)) {
                 this.#endNavigation();
             }
         };
@@ -132,6 +141,7 @@ export class ViewportTools {
         };
         this.#onWindowBlur = () => this.#endNavigation();
         canvas.addEventListener('pointerdown', this.#onPointerDown, true);
+        window.addEventListener('pointermove', this.#onPointerMove, true);
         window.addEventListener('pointerup', this.#onPointerUp, true);
         canvas.addEventListener('pointercancel', this.#onPointerCancel);
         canvas.addEventListener('lostpointercapture', this.#onPointerCancel);
@@ -269,6 +279,7 @@ export class ViewportTools {
     destroy() {
         this.#endNavigation();
         this.#canvas.removeEventListener('pointerdown', this.#onPointerDown, true);
+        window.removeEventListener('pointermove', this.#onPointerMove, true);
         window.removeEventListener('pointerup', this.#onPointerUp, true);
         this.#canvas.removeEventListener('pointercancel', this.#onPointerCancel);
         this.#canvas.removeEventListener('lostpointercapture', this.#onPointerCancel);
