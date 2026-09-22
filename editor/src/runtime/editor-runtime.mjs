@@ -107,7 +107,14 @@ export class EditorRuntime {
                 transform => this.#emitTransformPreview(transform),
                 (before, after, label) => this.#commitTransform(this.#selectedEntityId, before, after, label)
             );
-            this.#viewportTools = new ViewportTools(app, camera, this.#canvas, this.#transformController);
+            this.#viewportTools = new ViewportTools(
+                app,
+                camera,
+                this.#canvas,
+                this.#transformController,
+                active => this.#emit({ type: 'viewportNavigationChanged', active }),
+                speed => this.#emit({ type: 'statusChanged', message: `Fly speed: ${speed.toFixed(1)}` })
+            );
             const worldLayer = app.scene.layers.getLayerByName('World');
             this.#selectionController = new SelectionController(
                 this.#canvas,

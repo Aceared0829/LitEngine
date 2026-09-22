@@ -27,6 +27,7 @@ export const defaultSnapSettings = {
  * @property {CoordinateSpace} coordinateSpace - Requested transform axis space.
  * @property {HistorySnapshot} history - Transform history availability.
  * @property {SnapSettings} snap - Gizmo snapping preferences.
+ * @property {boolean} viewportNavigationActive - Whether RMB viewport navigation owns keyboard input.
  * @property {string} statusMessage - Short runtime feedback for the status bar.
  * @property {string | null} error - Runtime initialization error.
  */
@@ -40,6 +41,7 @@ export const initialEditorState = {
     coordinateSpace: 'world',
     history: emptyHistory,
     snap: defaultSnapSettings,
+    viewportNavigationActive: false,
     statusMessage: '正在初始化本地编辑器…',
     error: null
 };
@@ -94,6 +96,11 @@ export const editorReducer = (state, event) => {
             return {
                 ...state,
                 snap: event.snap
+            };
+        case 'viewportNavigationChanged':
+            return {
+                ...state,
+                viewportNavigationActive: event.active
             };
         case 'statusChanged':
             return {

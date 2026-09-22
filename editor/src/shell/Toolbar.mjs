@@ -36,7 +36,7 @@ export function Toolbar({ state, dispatch, ready }) {
                 dispatch({ type: 'redo' });
                 return;
             }
-            if (!ready || hasMeta || event.altKey) {
+            if (!ready || hasMeta || event.altKey || state.viewportNavigationActive) {
                 return;
             }
 
@@ -82,7 +82,7 @@ export function Toolbar({ state, dispatch, ready }) {
 
         window.addEventListener('keydown', onKeyDown);
         return () => window.removeEventListener('keydown', onKeyDown);
-    }, [dispatch, ready, state.activeTool, state.coordinateSpace]);
+    }, [dispatch, ready, state.activeTool, state.coordinateSpace, state.viewportNavigationActive]);
 
     const toolButton = (tool, label, shortcut, title) => jsx(Button, {
         className: `toolbar-button toolbar-tool ${state.activeTool === tool ? 'toolbar-button-active' : ''}`,

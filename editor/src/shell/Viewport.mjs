@@ -36,9 +36,9 @@ export function Viewport({ canvasRef, state, dispatch }) {
         showHelp && jsx('div', { className: 'viewport-help-card', role: 'dialog', 'aria-label': 'Viewport navigation help' },
             jsx('strong', null, 'Viewport navigation'),
             jsx('p', null, 'Click select · drag LMB orbit · MMB / Shift+LMB pan · wheel zoom'),
-            jsx('p', null, 'Hold RMB for fly look · WASD / arrows move · Q/E vertical move'),
-            jsx('p', null, 'Q/W/E/R tools · F frame selected · Shift+F frame all · Esc clear selection')
+            jsx('p', null, 'Hold RMB for fly look and WASD / arrows movement · Q/E vertical move'),
+            jsx('p', null, 'Q/W/E/R tools work when RMB navigation is not held · F frame selected · Shift+F frame all')
         ),
-        jsx('div', { className: 'viewport-hint' }, 'Click to select · drag to orbit · F to frame')
+        jsx('div', { className: 'viewport-hint' }, 'Hold RMB + WASD to fly · Q/W/E/R tools · F to frame')
     );
 }

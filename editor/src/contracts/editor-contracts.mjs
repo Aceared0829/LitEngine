@@ -54,10 +54,11 @@
  * @typedef {{ type: 'transformChanged', entityId: string, transform: Transform }} TransformChangedEvent
  * @typedef {{ type: 'historyChanged', history: HistorySnapshot }} HistoryChangedEvent
  * @typedef {{ type: 'snapChanged', snap: SnapSettings }} SnapChangedEvent
+ * @typedef {{ type: 'viewportNavigationChanged', active: boolean }} ViewportNavigationChangedEvent
  * @typedef {{ type: 'statusChanged', message: string }} StatusChangedEvent
  * @typedef {{ type: 'runtimeError', message: string }} RuntimeErrorEvent
  *
- * @typedef {ReadyEvent | SceneChangedEvent | SelectionChangedEvent | TransformChangedEvent | HistoryChangedEvent | SnapChangedEvent | StatusChangedEvent | RuntimeErrorEvent} RuntimeEvent
+ * @typedef {ReadyEvent | SceneChangedEvent | SelectionChangedEvent | TransformChangedEvent | HistoryChangedEvent | SnapChangedEvent | ViewportNavigationChangedEvent | StatusChangedEvent | RuntimeErrorEvent} RuntimeEvent
  */
 
 export {};

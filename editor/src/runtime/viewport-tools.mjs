@@ -2,6 +2,8 @@ import { CameraControls } from 'playcanvas/scripts/esm/camera-controls.mjs';
 import { Grid } from 'playcanvas/scripts/esm/grid.mjs';
 import { BoundingBox, Color, Layer, OutlineRenderer, Vec3, Vec4, ViewCube } from 'playcanvas';
 
+import { adjustFlySpeed, getFlySpeedRatios, getWheelSteps, setFlySpeed } from './fly-speed.mjs';
+
 /**
  * @import { AppBase, Entity } from 'playcanvas'
  */
@@ -43,18 +45,45 @@ export class ViewportTools {
     /** @type {import('./transform-controller.mjs').TransformController} */
     #transformController;
 
+    /** @type {(active: boolean) => void} */
+    #onNavigationChange;
+
+    /** @type {(speed: number) => void} */
+    #onFlySpeedChange;
+
+    /** @type {{ fast: number, slow: number }} */
+    #flySpeedRatios;
+
+    #flySpeed;
+
+    /** @type {(event: PointerEvent) => void} */
+    #onPointerDown;
+
+    /** @type {(event: PointerEvent) => void} */
+    #onPointerUp;
+
+    /** @type {(event: WheelEvent) => void} */
+    #onWheel;
+
+    /** @type {() => void} */
+    #onWindowBlur;
+
     /**
      * @param {AppBase} app - PlayCanvas app.
      * @param {Entity} cameraEntity - Viewport camera entity.
      * @param {HTMLCanvasElement} canvas - Viewport canvas.
      * @param {import('./transform-controller.mjs').TransformController} transformController - Gizmo controller.
+     * @param {(active: boolean) => void} onNavigationChange - Reports RMB navigation state.
+     * @param {(speed: number) => void} onFlySpeedChange - Reports editor fly speed adjustments.
      */
-    constructor(app, cameraEntity, canvas, transformController) {
+    constructor(app, cameraEntity, canvas, transformController, onNavigationChange, onFlySpeedChange) {
         this.#app = app;
         this.#cameraEntity = cameraEntity;
         this.#camera = cameraEntity.camera;
         this.#canvas = canvas;
         this.#transformController = transformController;
+        this.#onNavigationChange = onNavigationChange;
+        this.#onFlySpeedChange = onFlySpeedChange;
 
         this.#cameraControls = /** @type {CameraControls} */ (cameraEntity.script.create(CameraControls));
         Object.assign(this.#cameraControls, {
@@ -62,6 +91,39 @@ export class ViewportTools {
             rotateDamping: 0,
             moveDamping: 0
         });
+        this.#cameraControls.enableFly = false;
+        this.#flySpeed = this.#cameraControls.moveSpeed;
+        this.#flySpeedRatios = getFlySpeedRatios(this.#cameraControls);
+
+        this.#onPointerDown = (event) => {
+            if (event.button !== 2) {
+                return;
+            }
+            this.#cameraControls.enableFly = true;
+            this.#onNavigationChange(true);
+        };
+        this.#onPointerUp = (event) => {
+            if (event.button !== 2) {
+                return;
+            }
+            this.#endNavigation();
+        };
+        this.#onWheel = (event) => {
+            if (!(event.buttons & 2)) {
+                return;
+            }
+
+            event.preventDefault();
+            event.stopImmediatePropagation();
+            this.#flySpeed = adjustFlySpeed(this.#flySpeed, getWheelSteps(event));
+            setFlySpeed(this.#cameraControls, this.#flySpeed, this.#flySpeedRatios);
+            this.#onFlySpeedChange(this.#flySpeed);
+        };
+        this.#onWindowBlur = () => this.#endNavigation();
+        canvas.addEventListener('pointerdown', this.#onPointerDown, true);
+        window.addEventListener('pointerup', this.#onPointerUp, true);
+        canvas.addEventListener('wheel', this.#onWheel, { capture: true, passive: false });
+        window.addEventListener('blur', this.#onWindowBlur);
 
         const outlineLayer = new Layer({ name: 'EditorOutline' });
         app.scene.layers.push(outlineLayer);
@@ -182,7 +244,17 @@ export class ViewportTools {
         return true;
     }
 
+    #endNavigation() {
+        this.#cameraControls.enableFly = false;
+        this.#onNavigationChange(false);
+    }
+
     destroy() {
+        this.#endNavigation();
+        this.#canvas.removeEventListener('pointerdown', this.#onPointerDown, true);
+        window.removeEventListener('pointerup', this.#onPointerUp, true);
+        this.#canvas.removeEventListener('wheel', this.#onWheel, true);
+        window.removeEventListener('blur', this.#onWindowBlur);
         this.#resizeObserver.disconnect();
         this.#viewCube.destroy();
         this.#outlineRenderer.destroy();

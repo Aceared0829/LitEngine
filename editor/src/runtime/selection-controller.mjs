@@ -33,15 +33,27 @@ export class SelectionController {
 
     #pointerDown = new Vec2();
 
+    /** @type {number | null} */
+    #pointerId = null;
+
     #requestId = 0;
 
     /** @type {(event: PointerEvent) => void} */
     #onPointerDown = (event) => {
+        if (event.button !== 0) {
+            return;
+        }
+        this.#pointerId = event.pointerId;
         this.#pointerDown.set(event.clientX, event.clientY);
     };
 
     /** @type {(event: PointerEvent) => Promise<void>} */
     #onPointerUp = async (event) => {
+        if (event.button !== 0 || event.pointerId !== this.#pointerId) {
+            return;
+        }
+        this.#pointerId = null;
+
         if (this.#isInteractionBlocked() ||
             Math.abs(event.clientX - this.#pointerDown.x) > CLICK_TOLERANCE ||
             Math.abs(event.clientY - this.#pointerDown.y) > CLICK_TOLERANCE) {
