@@ -23,7 +23,7 @@ export function Viewport({ canvasRef, state, dispatch }) {
         jsx('div', { className: 'viewport-chrome viewport-toolbar' },
             jsx('span', { className: 'viewport-mode' }, state.activeTool === 'select' ? 'Select' : state.activeTool),
             jsx('span', { className: 'viewport-separator' }),
-            jsx('span', null, effectiveSpace === 'world' ? 'World' : 'Local'),
+            jsx('span', { title: state.activeTool === 'scale' ? 'Coordinate space: Local (Scale is locked to local space)' : `Coordinate space: ${effectiveSpace === 'world' ? 'World' : 'Local'} (~ / X to toggle)` }, effectiveSpace === 'world' ? 'World' : 'Local'),
             jsx('span', { className: 'viewport-separator' }),
             jsx('span', { className: state.snap.enabled ? 'snap-indicator is-enabled' : 'snap-indicator' }, `Snap ${state.snap.enabled ? 'On' : 'Off'}`),
             jsx('span', { className: 'viewport-chrome-spacer' }),
@@ -47,8 +47,8 @@ export function Viewport({ canvasRef, state, dispatch }) {
             jsx('p', null, 'LMB + RMB / MMB drag to pan · wheel to dolly · RMB + wheel to adjust fly speed'),
             jsx('p', null, 'Hold RMB + WASD / arrows to fly · E/Q move along world up/down (Y-up in PlayCanvas)'),
             jsx('p', null, 'Alt + LMB orbit · Alt + RMB dolly · Alt + MMB pan · F frame selection'),
-            jsx('p', null, 'Q/W/E/R tools outside navigation · Shift+F frame all · Shift/Ctrl fast/slow fly')
+            jsx('p', null, 'Q/W/E/R tools outside navigation · ~ / X toggle space · Shift+F frame all · Shift/Ctrl fast/slow fly')
         ),
-        jsx('div', { className: 'viewport-hint' }, 'Hold RMB + WASD to fly · Q/W/E/R tools · F to frame')
+        jsx('div', { className: 'viewport-hint' }, 'Hold RMB + WASD to fly · Q/W/E/R tools · ~ toggle space · F to frame')
     );
 }

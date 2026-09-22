@@ -16,12 +16,13 @@ The editor follows the regular-mouse perspective defaults in [Unreal Engine view
 | Alt + LMB | Orbit the selected pivot |
 | Alt + RMB | Dolly toward/away from pivot |
 | Alt + MMB | Pan |
+| ~ / ` / X | Toggle world/local coordinate space |
 | F / Shift+F | Frame selection / frame scene |
 | Shift / Ctrl while flying | 2x / 0.5x movement speed (editor convenience) |
 
 UE uses Z-up; PlayCanvas uses Y-up with an XZ ground plane. E/Q preserve UE's **world-vertical semantics**, not its axis letter. This implementation does not convert scene coordinates or Inspector labels to UE's coordinate system.
 
-The viewport Speed input and RMB wheel update the same speed (0.1–1000 world units per second). Keyboard tool shortcuts Q/W/E/R are suspended synchronously while RMB navigation owns input. Text controls keep their own keyboard events. Alt or mouse chords cannot become selection clicks at gesture end, and leaving the canvas with captured input, losing focus, cancellation, and partial button releases are handled without latching flight.
+The viewport Speed input and RMB wheel update the same speed (0.1–1000 world units per second). Keyboard tool shortcuts Q/W/E/R and coordinate space toggle (~ / X) are suspended synchronously while RMB navigation owns input. Text controls keep their own keyboard events. Alt or mouse chords cannot become selection clicks at gesture end, and leaving the canvas with captured input, losing focus, cancellation, and partial button releases are handled without latching flight.
 
 Orthographic views, Magic Mouse/trackpad-specific gestures, remappable bindings, temporary FOV zoom, and distance-based speed preferences are not part of this perspective-only implementation.
 
