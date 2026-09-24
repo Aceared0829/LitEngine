@@ -268,6 +268,7 @@ class SpriteComponent extends Component {
         super(system, entity);
 
         this._material = system.defaultMaterial;
+        this._node.coordinateSystem = entity.coordinateSystem;
 
         entity.addChild(this._node);
 
@@ -881,7 +882,8 @@ class SpriteComponent extends Component {
     _showFrame(frame) {
         if (!this.sprite) return;
 
-        const mesh = this.sprite.meshes[frame];
+        this._node.coordinateSystem = this.entity.coordinateSystem;
+        const mesh = this.sprite._getMeshes(this.entity.coordinateSystem)[frame];
         // if mesh is null then hide the mesh instance
         if (!mesh) {
             if (this._meshInstance) {
@@ -1039,9 +1041,14 @@ class SpriteComponent extends Component {
         }
 
         // scale
-        this._node.setLocalScale(scaleX, scaleY, 1);
-        // pivot
-        this._node.setLocalPosition(posX, posY, 0);
+        this._node.coordinateSystem = this.entity.coordinateSystem;
+        if (this.entity.coordinateSystem === 'unreal') {
+            this._node.setLocalScale(scaleX, 1, scaleY);
+            this._node.setLocalPosition(posX, 0, posY);
+        } else {
+            this._node.setLocalScale(scaleX, scaleY, 1);
+            this._node.setLocalPosition(posX, posY, 0);
+        }
     }
 
     // updates AABB while 9-slicing
@@ -1049,7 +1056,11 @@ class SpriteComponent extends Component {
         // pivot
         aabb.center.set(0, 0, 0);
         // size
-        aabb.halfExtents.set(this._outerScale.x * 0.5, this._outerScale.y * 0.5, 0.001);
+        if (this.entity.coordinateSystem === 'unreal') {
+            aabb.halfExtents.set(this._outerScale.x * 0.5, 0.001, this._outerScale.y * 0.5);
+        } else {
+            aabb.halfExtents.set(this._outerScale.x * 0.5, this._outerScale.y * 0.5, 0.001);
+        }
         // world transform
         aabb.setFromTransformedAabb(aabb, this._node.getWorldTransform());
         return aabb;

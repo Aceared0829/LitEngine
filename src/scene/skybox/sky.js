@@ -69,9 +69,10 @@ class Sky {
     constructor(scene) {
         this.device = scene.device;
         this.scene = scene;
+        this.node.coordinateSystem = scene.coordinateSystem;
 
         // defaults
-        this.center = new Vec3(0, 1, 0);
+        this.center = scene.coordinateSystem === 'unreal' ? new Vec3(0, 0, 1) : new Vec3(0, 1, 0);
 
         this.centerArray = new Float32Array(3);
         this.projectedSkydomeCenterId = this.device.scope.resolve('projectedSkydomeCenter');
@@ -124,7 +125,8 @@ class Sky {
 
     /**
      * Sets the center of the sky. Ignored for {@link SKYTYPE_INFINITE}. Typically only the
-     * y-coordinate is used, representing the tripod height. Defaults to (0, 1, 0).
+     * coordinate is used, representing the tripod height. Defaults to world up: (0, 1, 0) in
+     * legacy mode and (0, 0, 1) in Unreal mode.
      *
      * @type {Vec3}
      */

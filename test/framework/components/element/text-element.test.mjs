@@ -23,6 +23,38 @@ describe('TextElement', function () {
         buildElement(done);
     });
 
+    it('keeps text glyphs upright in a top-left Unreal screen', function () {
+        const screen = new Entity('unreal-screen');
+        screen.coordinateSystem = 'unreal';
+        screen.addComponent('screen', { screenSpace: true });
+        app.root.addChild(screen);
+
+        const textEntity = new Entity('unreal-text');
+        textEntity.coordinateSystem = 'unreal';
+        const textElement = app.systems.element.addComponent(textEntity, { type: 'text' });
+        screen.addChild(textEntity);
+        textElement.fontAsset = fontAsset;
+        textElement.text = 'A';
+
+        const positions = textElement._text._meshInfo[0].positions;
+        expect(positions[1]).to.be.greaterThan(positions[10]);
+
+        const worldScreen = new Entity('unreal-world-screen');
+        worldScreen.coordinateSystem = 'unreal';
+        worldScreen.addComponent('screen', { screenSpace: false });
+        app.root.addChild(worldScreen);
+
+        const worldTextEntity = new Entity('unreal-world-text');
+        worldTextEntity.coordinateSystem = 'unreal';
+        const worldTextElement = app.systems.element.addComponent(worldTextEntity, { type: 'text' });
+        worldScreen.addChild(worldTextEntity);
+        worldTextElement.fontAsset = fontAsset;
+        worldTextElement.text = 'A';
+
+        const worldPositions = worldTextElement._text._meshInfo[0].positions;
+        expect(worldPositions[1]).to.be.greaterThan(worldPositions[10]);
+    });
+
     afterEach(function () {
         for (const key in assets) {
             assets[key].unload();

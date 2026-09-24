@@ -21,6 +21,7 @@ class ParticleGPUUpdater {
         this.frameRandomUniform = new Float32Array(3);
         this.emitterPosUniform = new Float32Array(3);
         this.emitterScaleUniform = new Float32Array([1, 1, 1]);
+        this.initialVelocityDirectionUniform = new Float32Array(3);
 
         this.constantParticleTexIN = gd.scope.resolve('particleTexIN');
         this.constantParticleTexOUT = gd.scope.resolve('particleTexOUT');
@@ -31,6 +32,7 @@ class ParticleGPUUpdater {
         this.constantSpawnBoundsSphere = gd.scope.resolve('spawnBoundsSphere');
         this.constantSpawnBoundsSphereInnerRatio = gd.scope.resolve('spawnBoundsSphereInnerRatio');
         this.constantInitialVelocity = gd.scope.resolve('initialVelocity');
+        this.constantInitialVelocityDirection = gd.scope.resolve('initialVelocityDirection');
         this.constantFrameRandom = gd.scope.resolve('frameRandom');
         this.constantDelta = gd.scope.resolve('delta');
         this.constantRate = gd.scope.resolve('rate');
@@ -106,6 +108,16 @@ class ParticleGPUUpdater {
         this.emitterPosUniform[1] = emitterPos.y;
         this.emitterPosUniform[2] = emitterPos.z;
         this.constantEmitterPos.setValue(this.emitterPosUniform);
+        if (node?.coordinateSystem === 'unreal') {
+            this.initialVelocityDirectionUniform[0] = 1;
+            this.initialVelocityDirectionUniform[1] = 0;
+            this.initialVelocityDirectionUniform[2] = 0;
+        } else {
+            this.initialVelocityDirectionUniform[0] = 0;
+            this.initialVelocityDirectionUniform[1] = 0;
+            this.initialVelocityDirectionUniform[2] = -1;
+        }
+        this.constantInitialVelocityDirection.setValue(this.initialVelocityDirectionUniform);
         this.constantFrameRandom.setValue(this.frameRandomUniform);
         this.constantDelta.setValue(delta);
         this.constantRate.setValue(emitter.rate);

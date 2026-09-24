@@ -2,6 +2,7 @@ import { expect } from 'chai';
 
 import { Color } from '../../../../src/core/math/color.js';
 import { Vec2 } from '../../../../src/core/math/vec2.js';
+import { Vec3 } from '../../../../src/core/math/vec3.js';
 import { Entity } from '../../../../src/framework/entity.js';
 import {
     BLUR_BOX,
@@ -36,6 +37,20 @@ describe('LightComponent', function () {
     });
 
     describe('#addComponent', function () {
+
+        it('aims Unreal spot lights along local +X for light bounds', function () {
+            const e = new Entity();
+            e.coordinateSystem = 'unreal';
+            app.root.addChild(e);
+            e.addComponent('light', { type: 'spot', range: 10, outerConeAngle: 30 });
+
+            const sphere = { center: new Vec3(), radius: 0 };
+            e.light._light.getBoundingSphere(sphere);
+
+            expect(sphere.center.x).to.be.greaterThan(0);
+            expect(sphere.center.y).to.equal(0);
+            expect(sphere.center.z).to.equal(0);
+        });
 
         it('creates a component with sensible defaults', function () {
             const e = new Entity();

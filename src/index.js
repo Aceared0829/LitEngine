@@ -75,6 +75,24 @@ export { Mat4 } from './core/math/mat4.js';
 export { Quat } from './core/math/quat.js';
 export { Vec2 } from './core/math/vec2.js';
 export { Vec3 } from './core/math/vec3.js';
+export {
+    legacyToUnrealVector,
+    unrealToLegacyVector,
+    legacyToUnrealScale,
+    unrealToLegacyScale,
+    legacyToUnrealPaper2DVector,
+    unrealToLegacyPaper2DVector,
+    legacyToUnrealPaper2DScale,
+    unrealToLegacyPaper2DScale,
+    legacyToUnrealPaper2DRotation,
+    unrealToLegacyPaper2DRotation,
+    legacyToUnrealRotation,
+    unrealToLegacyRotation,
+    unrealEulerToRotation,
+    unrealRotationToEuler,
+    legacyToUnrealMatrix,
+    unrealToLegacyMatrix
+} from './core/math/coordinate-conversion.js';
 export { Vec4 } from './core/math/vec4.js';
 
 // CORE / SHAPE
@@ -295,6 +313,7 @@ export { RigidBodyComponentSystem } from './framework/components/rigid-body/syst
 export { SingleContactResult } from './framework/components/rigid-body/single-contact-result.js';
 export { SceneRegistry } from './framework/scene-registry.js';
 export { SceneRegistryItem } from './framework/scene-registry-item.js';
+export { migrateLegacySceneTransforms, previewMigratedSceneTransforms } from './framework/parsers/scene-coordinate-migration.js';
 export * from './framework/components/screen/constants.js';
 export { ScreenComponent } from './framework/components/screen/component.js';
 export { ScreenComponentSystem } from './framework/components/screen/system.js';

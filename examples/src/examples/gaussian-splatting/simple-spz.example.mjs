@@ -65,6 +65,7 @@ createOptions.componentSystems = [
 createOptions.resourceHandlers = [TextureHandler, ContainerHandler, ScriptHandler, GSplatHandler];
 
 const app = new AppBase(canvas);
+app.coordinateSystem = 'legacy';
 app.init(createOptions);
 
 // Register the spz parser with the gsplat resource handler

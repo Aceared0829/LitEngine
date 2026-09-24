@@ -1,6 +1,7 @@
 import { EventHandler } from '../../core/event-handler.js';
 import { Vec3 } from '../../core/math/vec3.js';
 import { Quat } from '../../core/math/quat.js';
+import { copyXrRotationToEngine, copyXrVectorToEngine } from './xr-coordinate.js';
 
 /**
  * @import { XrMeshDetection } from './xr-mesh-detection.js'
@@ -57,6 +58,18 @@ class XrMesh extends EventHandler {
     /** @private */
     _rotation = new Quat();
 
+    /** @private */
+    _convertedVertices = null;
+
+    /** @private */
+    _convertedIndices = null;
+
+    /** @private */
+    _convertedDataSource = null;
+
+    /** @private */
+    _convertedCoordinateSystem = null;
+
     /**
      * Create a new XrMesh instance.
      *
@@ -97,7 +110,27 @@ class XrMesh extends EventHandler {
      * @type {Float32Array}
      */
     get vertices() {
-        return this._xrMesh.vertices;
+        const manager = this._meshDetection._manager;
+        if (manager.app.coordinateSystem !== 'unreal') {
+            return this._xrMesh.vertices;
+        }
+
+        if (this._convertedDataSource !== this._xrMesh.vertices || this._convertedCoordinateSystem !== manager.app.coordinateSystem) {
+            const source = this._xrMesh.vertices;
+            if (source.length % 3 !== 0) {
+                throw new Error('Unreal XR mesh conversion requires three-component vertices');
+            }
+            const converted = new Float32Array(source.length);
+            for (let i = 0; i < source.length; i += 3) {
+                converted[i] = -source[i + 2];
+                converted[i + 1] = source[i];
+                converted[i + 2] = source[i + 1];
+            }
+            this._convertedVertices = converted;
+            this._convertedDataSource = source;
+            this._convertedCoordinateSystem = manager.app.coordinateSystem;
+        }
+        return this._convertedVertices;
     }
 
     /**
@@ -106,7 +139,28 @@ class XrMesh extends EventHandler {
      * @type {Uint32Array}
      */
     get indices() {
-        return this._xrMesh.indices;
+        const manager = this._meshDetection._manager;
+        if (manager.app.coordinateSystem !== 'unreal') {
+            return this._xrMesh.indices;
+        }
+
+        if (this._convertedDataSource !== this._xrMesh.vertices || !this._convertedIndices ||
+            this._convertedCoordinateSystem !== manager.app.coordinateSystem) {
+            const source = this._xrMesh.indices;
+            const converted = new Uint32Array(source);
+            if (converted.length % 3 !== 0) {
+                throw new Error('Unreal XR mesh conversion requires triangle-list indices');
+            }
+            for (let i = 0; i < converted.length; i += 3) {
+                const second = converted[i + 1];
+                converted[i + 1] = converted[i + 2];
+                converted[i + 2] = second;
+            }
+            this._convertedIndices = converted;
+            this._convertedDataSource = this._xrMesh.vertices;
+            this._convertedCoordinateSystem = manager.app.coordinateSystem;
+        }
+        return this._convertedIndices;
     }
 
     /** @ignore */
@@ -124,13 +178,16 @@ class XrMesh extends EventHandler {
         const manager = this._meshDetection._manager;
         const pose = frame.getPose(this._xrMesh.meshSpace, manager._referenceSpace);
         if (pose) {
-            this._position.copy(pose.transform.position);
-            this._rotation.copy(pose.transform.orientation);
+            copyXrVectorToEngine(manager, pose.transform.position, this._position);
+            copyXrRotationToEngine(manager, pose.transform.orientation, this._rotation);
         }
 
         // attributes have been changed
         if (this._lastChanged !== this._xrMesh.lastChangedTime) {
             this._lastChanged = this._xrMesh.lastChangedTime;
+            this._convertedDataSource = null;
+            this._convertedVertices = null;
+            this._convertedIndices = null;
             this.fire('change');
         }
     }

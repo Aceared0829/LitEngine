@@ -1,10 +1,14 @@
 import { EventHandler } from '../../core/event-handler.js';
 import { Vec3 } from '../../core/math/vec3.js';
 import { Quat } from '../../core/math/quat.js';
+import { copyXrRotationToEngine, copyXrVectorToEngine } from './xr-coordinate.js';
 
 /**
  * @import { XrAnchors } from './xr-anchors.js'
  */
+
+const _xrPosition = new Vec3();
+const _xrRotation = new Quat();
 
 /**
  * @callback XrAnchorPersistCallback
@@ -135,12 +139,14 @@ class XrAnchor extends EventHandler {
 
         const pose = frame.getPose(this._xrAnchor.anchorSpace, this._anchors.manager._referenceSpace);
         if (pose) {
-            if (this._position.equals(pose.transform.position) && this._rotation.equals(pose.transform.orientation)) {
+            copyXrVectorToEngine(this._anchors.manager, pose.transform.position, _xrPosition);
+            copyXrRotationToEngine(this._anchors.manager, pose.transform.orientation, _xrRotation);
+            if (this._position.equals(_xrPosition) && this._rotation.equals(_xrRotation)) {
                 return;
             }
 
-            this._position.copy(pose.transform.position);
-            this._rotation.copy(pose.transform.orientation);
+            this._position.copy(_xrPosition);
+            this._rotation.copy(_xrRotation);
             this.fire('change');
         }
     }

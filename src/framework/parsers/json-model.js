@@ -25,6 +25,7 @@ import { MorphInstance } from '../../scene/morph-instance.js';
 import { MorphTarget } from '../../scene/morph-target.js';
 import { Skin } from '../../scene/skin.js';
 import { SkinInstance } from '../../scene/skin-instance.js';
+import { migrateLegacyModel, previewMigratedModel } from './model-coordinate-migration.js';
 
 const JSON_PRIMITIVE_TYPE = {
     'points': PRIMITIVE_POINTS,
@@ -49,6 +50,7 @@ const JSON_VERTEX_ELEMENT_TYPE = {
 // Take PlayCanvas JSON model data and create Model
 class JsonModelParser {
     constructor(modelHandler) {
+        this._coordinateSystem = modelHandler.app?.coordinateSystem ?? 'unreal';
         this._device = modelHandler.device;
         this._defaultMaterial = modelHandler.defaultMaterial;
     }
@@ -68,6 +70,15 @@ class JsonModelParser {
     }
 
     parse(data, callback) {
+        if (this._coordinateSystem === 'unreal') {
+            if (!Object.hasOwn(data, 'coordinateMigration')) {
+                callback('Unreal coordinate mode requires JSON model data migrated with migrateLegacyModel() or migrateLegacyPaper2DModel()');
+                return;
+            }
+            data = migrateLegacyModel(data);
+        } else if (Object.hasOwn(data, 'coordinateMigration')) {
+            data = previewMigratedModel(data);
+        }
         const modelData = data.model;
         if (!modelData) {
             callback(null, null);
@@ -119,6 +130,7 @@ class JsonModelParser {
             const nodeData = modelData.nodes[i];
 
             const node = new GraphNode(nodeData.name);
+            node.coordinateSystem = this._coordinateSystem;
             node.setLocalPosition(nodeData.position[0], nodeData.position[1], nodeData.position[2]);
             node.setLocalEulerAngles(nodeData.rotation[0], nodeData.rotation[1], nodeData.rotation[2]);
             node.setLocalScale(nodeData.scale[0], nodeData.scale[1], nodeData.scale[2]);

@@ -6,6 +6,7 @@ import { Vec3 } from '../../core/math/vec3.js';
 import { Ray } from '../../core/shape/ray.js';
 import { XrHand } from './xr-hand.js';
 import { now } from '../../core/time.js';
+import { copyXrRotationToEngine, copyXrVectorToEngine } from './xr-coordinate.js';
 
 /**
  * @import { Entity } from '../entity.js'
@@ -481,12 +482,12 @@ class XrInputSource extends EventHandler {
                     this._dirtyLocal = true;
 
                     this._localPositionLast.copy(this._localPosition);
-                    this._localPosition.copy(gripPose.transform.position);
-                    this._localRotation.copy(gripPose.transform.orientation);
+                    copyXrVectorToEngine(this._manager, gripPose.transform.position, this._localPosition);
+                    copyXrRotationToEngine(this._manager, gripPose.transform.orientation, this._localRotation);
 
                     this._velocitiesAvailable = true;
                     if (this._manager.input.velocitiesSupported && gripPose.linearVelocity) {
-                        this._linearVelocity.copy(gripPose.linearVelocity);
+                        copyXrVectorToEngine(this._manager, gripPose.linearVelocity, this._linearVelocity);
                     } else if (dt > 0) {
                         vec3A.sub2(this._localPosition, this._localPositionLast).divScalar(dt);
                         this._linearVelocity.lerp(this._linearVelocity, vec3A, 0.15);
@@ -500,9 +501,10 @@ class XrInputSource extends EventHandler {
             const targetRayPose = frame.getPose(this._xrInputSource.targetRaySpace, this._manager._referenceSpace);
             if (targetRayPose) {
                 this._dirtyRay = true;
-                this._rayLocal.origin.copy(targetRayPose.transform.position);
+                copyXrVectorToEngine(this._manager, targetRayPose.transform.position, this._rayLocal.origin);
                 this._rayLocal.direction.set(0, 0, -1);
-                quat.copy(targetRayPose.transform.orientation);
+                copyXrVectorToEngine(this._manager, this._rayLocal.direction, this._rayLocal.direction);
+                copyXrRotationToEngine(this._manager, targetRayPose.transform.orientation, quat);
                 quat.transformVector(this._rayLocal.direction, this._rayLocal.direction);
             }
         }

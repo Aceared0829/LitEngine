@@ -30,6 +30,7 @@ uniform float seed;
 uniform float startAngle;
 uniform float startAngle2;
 uniform float initialVelocity;
+uniform vec3 initialVelocityDirection;
 
 uniform float graphSampleSize;
 uniform float graphNumSamples;

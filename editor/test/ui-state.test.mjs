@@ -61,11 +61,64 @@ test('Inspector and toolbar maintain current state through real React DOM events
     assert.equal(commands.length, 1);
     assert.equal(commands[0].entityId, 'cone');
     assert.deepEqual(commands[0].transform.scale, [2.5, 2.25, 1.5]);
-    commands.length = 0;
+    commands.splice(0);
     state = { ...state, selectedEntityId: 'box' };
     await renderInspector();
     assert.equal(document.querySelector('[aria-label="Scale X"]').value, '1');
     assert.equal(commands.length, 0);
+
+    const pointer = (type, selector, { pointerId = 1, clientX = 10, button = 0, pointerType = 'mouse' } = {}) => act(() => {
+        const target = selector ? document.querySelector(selector) : window;
+        const event = new dom.window.Event(type, { bubbles: true, cancelable: true });
+        Object.assign(event, { pointerId, clientX, button, pointerType, isPrimary: true });
+        target.dispatchEvent(event);
+    });
+    await pointer('pointerdown', '[aria-label="Location X"]', { clientX: 10 });
+    await pointer('pointermove', null, { clientX: 30 });
+    assert.deepEqual(commands.map(command => command.type), ['beginTransformDrag', 'previewTransformDrag']);
+    assert.equal(commands[1].value, 1.2);
+    assert.equal(commands[1].field, 'position');
+    assert.equal(commands[1].index, 0);
+    await pointer('pointermove', null, { clientX: 0 });
+    assert.equal(commands[2].value, 0.9);
+    await pointer('pointerup', null, { clientX: 0 });
+    assert.equal(commands.at(-1).type, 'endTransformDrag');
+    assert.equal(commands.at(-1).gestureId, commands[0].gestureId);
+    commands.splice(0);
+
+    await pointer('pointerdown', '[aria-label="Pitch Y (°)"]');
+    await pointer('pointermove', null, { clientX: 14 });
+    assert.equal(commands.at(-1).value, 4);
+    await pointer('pointercancel', null);
+    assert.equal(commands.at(-1).type, 'cancelTransformDrag');
+    commands.splice(0);
+
+    await pointer('pointerdown', '[aria-label="Scale Z"]');
+    await pointer('pointermove', null, { clientX: 20 });
+    assert.equal(commands.at(-1).value, 1.1);
+    await pointer('pointerup', null, { clientX: 20 });
+    commands.splice(0);
+
+    await pointer('pointerdown', '[aria-label="Scale Y"]');
+    await pointer('pointermove', null, { clientX: 12 });
+    await pointer('pointerup', null, { clientX: 12 });
+    assert.deepEqual(commands, []);
+
+    await pointer('pointerdown', '[aria-label="Location Y"]');
+    await pointer('pointermove', null, { clientX: 20 });
+    state = { ...state, selectedEntityId: 'cone' };
+    await renderInspector();
+    assert.equal(commands.at(-1).type, 'cancelTransformDrag');
+    assert.equal(commands.at(-1).entityId, 'box');
+    commands.splice(0);
+    state = { ...state, selectedEntityId: 'box' };
+    await renderInspector();
+
+    await change('[aria-label="Location X"]', '3');
+    await enter('[aria-label="Location X"]');
+    assert.equal(commands.at(-1).type, 'setTransform');
+    assert.equal(commands.at(-1).transform.position[0], 3);
+    commands.splice(0);
 
     const speedCommits = [];
     await act(() => root.render(createElement(NumberField, { value: 10, label: 'Speed', min: 0.1, onCommit: value => speedCommits.push(value) })));

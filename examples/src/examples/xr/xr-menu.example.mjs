@@ -145,6 +145,7 @@ createOptions.componentSystems = [
 createOptions.resourceHandlers = [AudioHandler, ContainerHandler, FontHandler, TextureHandler];
 
 const app = new AppBase(canvas);
+app.coordinateSystem = 'legacy';
 app.init(createOptions);
 
 app.setCanvasFillMode(FILLMODE_FILL_WINDOW);

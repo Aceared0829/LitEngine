@@ -44,7 +44,7 @@ const _tempScrollValue = new Vec2();
  * {@link Entity#scrollview} property:
  *
  * ```javascript
- * entity.scrollview.scroll = new Vec2(0, 1); // Scroll to the top
+ * entity.scrollview.scroll = new Vec2(0, 1); // Scroll to the top in legacy mode
  *
  * console.log(entity.scrollview.scroll);        // Get the scroll position and print it
  * ```
@@ -59,7 +59,8 @@ const _tempScrollValue = new Vec2();
 class ScrollViewComponent extends Component {
     /**
      * Fired whenever the scroll position changes. The handler is passed a {@link Vec2} containing
-     * the horizontal and vertical scroll values in the range 0..1.
+     * the horizontal and vertical scroll values in the range 0..1. In Unreal Screen UI, the
+     * vertical value increases from top to bottom; legacy UI uses the opposite order.
      *
      * @event
      * @example
@@ -1034,7 +1035,7 @@ class ScrollViewComponent extends Component {
         if (maxOffsetV === 0) {
             _tempScrollValue.y = 0;
         } else {
-            _tempScrollValue.y = contentPosition.y / -maxOffsetV;
+            _tempScrollValue.y = contentPosition.y / (maxOffsetV * this._getSign(ORIENTATION_VERTICAL));
         }
 
         return _tempScrollValue;
@@ -1114,7 +1115,8 @@ class ScrollViewComponent extends Component {
     }
 
     _getSign(orientation) {
-        return orientation === ORIENTATION_HORIZONTAL ? 1 : -1;
+        if (orientation === ORIENTATION_HORIZONTAL) return 1;
+        return this.entity.element?._isUnrealScreenUi() ? 1 : -1;
     }
 
     _getAxis(orientation) {

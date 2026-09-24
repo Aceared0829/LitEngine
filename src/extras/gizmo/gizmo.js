@@ -7,6 +7,7 @@ import { EventHandler } from '../../core/event-handler.js';
 import { PROJECTION_PERSPECTIVE, SORTMODE_NONE } from '../../scene/constants.js';
 import { Entity } from '../../framework/entity.js';
 import { Layer } from '../../scene/layer.js';
+import { unrealRotationToEuler } from '../../core/math/coordinate-conversion.js';
 
 /**
  * @import { AppBase } from '../../framework/app-base.js'
@@ -578,7 +579,9 @@ class Gizmo extends EventHandler {
         }
 
         this.root.setRotation(rotation);
-        this.fire(Gizmo.EVENT_ROTATIONUPDATE, rotation.getEulerAngles());
+        const node = this.nodes[this.nodes.length - 1];
+        this.fire(Gizmo.EVENT_ROTATIONUPDATE, node?.coordinateSystem === 'unreal' ?
+            unrealRotationToEuler(rotation) : rotation.getEulerAngles());
 
         this._renderUpdate = true;
     }

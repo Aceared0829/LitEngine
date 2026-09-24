@@ -5,6 +5,7 @@ import { Vec3 } from '../../core/math/vec3.js';
 import { Quat } from '../../core/math/quat.js';
 import { Color } from '../../core/math/color.js';
 import { BoundingBox } from '../../core/shape/bounding-box.js';
+import { INTERPOLATION_CUBIC, INTERPOLATION_LINEAR, INTERPOLATION_STEP } from '../../framework/anim/constants.js';
 import {
     CULLFACE_NONE,
     INDEXFORMAT_UINT8, INDEXFORMAT_UINT16, INDEXFORMAT_UINT32,
@@ -15,19 +16,97 @@ import {
     SEMANTIC_TEXCOORD1, SEMANTIC_TEXCOORD2, SEMANTIC_TEXCOORD3, SEMANTIC_TEXCOORD4,
     SEMANTIC_TEXCOORD5, SEMANTIC_TEXCOORD6, SEMANTIC_TEXCOORD7, TYPE_INT8,
     TYPE_UINT8, TYPE_INT16, TYPE_UINT16,
-    TYPE_INT32, TYPE_UINT32, TYPE_FLOAT32
+    TYPE_INT32, TYPE_UINT32, TYPE_FLOAT32, PRIMITIVE_TRIANGLES
 } from '../../platform/graphics/constants.js';
 import { IndexBuffer } from '../../platform/graphics/index-buffer.js';
 import { VertexBuffer } from '../../platform/graphics/vertex-buffer.js';
 import { StandardMaterial } from '../../scene/materials/standard-material.js';
 import { BLEND_NONE, BLEND_NORMAL, PROJECTION_ORTHOGRAPHIC } from '../../scene/constants.js';
+import {
+    convertUnrealIndexBufferToGltf,
+    convertUnrealInverseBindMatricesToGltf,
+    convertUnrealRotationToGltf,
+    convertUnrealScaleToGltf,
+    convertUnrealVectorToGltf,
+    convertUnrealVertexBufferToGltf
+} from './gltf-coordinate-conversion.js';
 
 /**
  * @import { Entity } from '../../framework/entity.js'
+ * @import { AnimTrack } from '../../framework/anim/evaluator/anim-track.js'
  */
 
 const ARRAY_BUFFER = 34962;
 const ELEMENT_ARRAY_BUFFER = 34963;
+
+const isArrayBuffer = value => Object.prototype.toString.call(value) === '[object ArrayBuffer]';
+
+const getNodePath = (entity) => {
+    const path = [];
+    while (entity) {
+        path.unshift(entity.name);
+        entity = entity.parent;
+    }
+    return path;
+};
+
+const resolveAnimationNode = (entities, entityPath) => {
+    const matches = entities.filter((entity) => {
+        const nodePath = getNodePath(entity);
+        if (entityPath.length > nodePath.length) return false;
+        const offset = nodePath.length - entityPath.length;
+        return entityPath.every((name, index) => nodePath[offset + index] === name);
+    });
+
+    if (matches.length !== 1) {
+        throw new Error(`GLB animation target path ${entityPath.join('/')} resolves to ${matches.length} nodes`);
+    }
+    return entities.indexOf(matches[0]);
+};
+
+const copyAnimationData = (data, label) => {
+    if (!Array.isArray(data) && Object.prototype.toString.call(data) !== '[object Float32Array]') {
+        throw new Error(`GLB animation ${label} data must be a number array or Float32Array`);
+    }
+
+    const result = new Float32Array(data.length);
+    for (let index = 0; index < data.length; index++) {
+        if (!Number.isFinite(data[index])) {
+            throw new Error(`GLB animation ${label} data must contain only finite numbers`);
+        }
+        result[index] = data[index];
+        if (!Number.isFinite(result[index])) {
+            throw new Error(`GLB animation ${label} data exceeds the float32 range`);
+        }
+    }
+    return result;
+};
+
+const convertAnimationOutputToGltf = (source, property, coordinateSystem) => {
+    const result = copyAnimationData(source, 'output');
+    if (coordinateSystem !== 'unreal') return result;
+
+    const components = property === 'localRotation' ? 4 : 3;
+    for (let offset = 0; offset < result.length; offset += components) {
+        const x = result[offset];
+        const y = result[offset + 1];
+        const z = result[offset + 2];
+        if (property === 'localPosition') {
+            result[offset] = y;
+            result[offset + 1] = z;
+            result[offset + 2] = -x;
+        } else if (property === 'localScale') {
+            result[offset] = y;
+            result[offset + 1] = z;
+            result[offset + 2] = x;
+        } else {
+            result[offset] = -y;
+            result[offset + 1] = -z;
+            result[offset + 2] = x;
+        }
+    }
+    return result;
+};
 
 const getIndexComponentType = (indexFormat) => {
     switch (indexFormat) {
@@ -158,6 +237,8 @@ class GltfExporter extends CoreExporter {
 
             // maps a buffer (vertex or index) to an array of bufferview indices
             bufferViewMap: new Map(),
+            bufferDataMap: new Map(),
+            indexBufferTypes: new Map(),
 
             compressableTexture: new Set()
         };
@@ -209,8 +290,16 @@ class GltfExporter extends CoreExporter {
                 }
 
                 const indexBuffer = mesh.indexBuffer[0];
-                if (buffers.indexOf(indexBuffer) < 0) {
+                if (indexBuffer && buffers.indexOf(indexBuffer) < 0) {
                     buffers.push(indexBuffer);
+                }
+                if (indexBuffer) {
+                    let types = resources.indexBufferTypes.get(indexBuffer);
+                    if (!types) {
+                        types = new Set();
+                        resources.indexBufferTypes.set(indexBuffer, types);
+                    }
+                    types.add(mesh.primitive[0].type);
                 }
 
                 // Collect skin
@@ -237,10 +326,30 @@ class GltfExporter extends CoreExporter {
         return resources;
     }
 
-    writeBufferViews(resources, json) {
+    writeBufferViews(resources, json, options = {}) {
         json.bufferViews = [];
 
         for (const buffer of resources.buffers) {
+            if (options.coordinateSystem === 'unreal') {
+                const source = buffer.lock();
+                if (buffer instanceof VertexBuffer) {
+                    resources.bufferDataMap.set(buffer, convertUnrealVertexBufferToGltf(
+                        source,
+                        buffer.getFormat(),
+                        buffer.getNumVertices()
+                    ));
+                } else if (buffer instanceof IndexBuffer) {
+                    const types = resources.indexBufferTypes.get(buffer);
+                    if (!types || [...types].some(type => type !== PRIMITIVE_TRIANGLES)) {
+                        throw new Error('Unreal glTF export requires triangle-list index buffers');
+                    }
+                    resources.bufferDataMap.set(buffer, convertUnrealIndexBufferToGltf(
+                        source,
+                        buffer.getNumIndices(),
+                        buffer.getFormat()
+                    ));
+                }
+            }
             GltfExporter.writeBufferView(resources, json, buffer);
         }
     }
@@ -279,7 +388,7 @@ class GltfExporter extends CoreExporter {
 
         let arrayBuffer;
         if (buffer instanceof VertexBuffer) {
-            arrayBuffer = buffer.lock();
+            arrayBuffer = resources.bufferDataMap?.get(buffer) ?? buffer.lock();
 
             const format = buffer.getFormat();
             if (format.interleaved) {
@@ -300,12 +409,12 @@ class GltfExporter extends CoreExporter {
                 resources.bufferViewMap.set(buffer, bufferViewIndices);
             }
         } else if (buffer instanceof IndexBuffer) {
-            arrayBuffer = buffer.lock();
+            arrayBuffer = resources.bufferDataMap?.get(buffer) ?? buffer.lock();
             const bufferViewIndex = addBufferView(ELEMENT_ARRAY_BUFFER, arrayBuffer.byteLength, offset);
             resources.bufferViewMap.set(buffer, [bufferViewIndex]);
         } else {
             // buffer is an array buffer (for images)
-            arrayBuffer = buffer;
+            arrayBuffer = resources.bufferDataMap?.get(buffer) ?? buffer;
             const bufferViewIndex = addBufferView(undefined, arrayBuffer.byteLength, offset);
             resources.bufferViewMap.set(buffer, [bufferViewIndex]);
         }
@@ -675,13 +784,18 @@ class GltfExporter extends CoreExporter {
         }
     }
 
-    writeNodes(resources, json) {
+    writeNodes(resources, json, options = {}) {
         if (resources.entities.length > 0) {
             json.nodes = resources.entities.map((entity) => {
                 const name = entity.name;
-                const t = entity.getLocalPosition();
-                const r = entity.getLocalRotation();
-                const s = entity.getLocalScale();
+                let t = entity.getLocalPosition();
+                let r = entity.getLocalRotation();
+                let s = entity.getLocalScale();
+                if (options.coordinateSystem === 'unreal') {
+                    t = convertUnrealVectorToGltf(t);
+                    r = convertUnrealRotationToGltf(r);
+                    s = convertUnrealScaleToGltf(s);
+                }
 
                 const node = {};
 
@@ -755,6 +869,10 @@ class GltfExporter extends CoreExporter {
     }
 
     static createPrimitive(resources, json, mesh, options = {}) {
+        if (options.coordinateSystem === 'unreal' && mesh.primitive[0].type !== PRIMITIVE_TRIANGLES) {
+            throw new Error('Unreal glTF export requires triangle-list meshes');
+        }
+
         const primitive = {
             attributes: {}
         };
@@ -834,6 +952,14 @@ class GltfExporter extends CoreExporter {
                 // and we get precision warnings from gltf validator
                 const positions = [];
                 mesh.getPositions(positions);
+                if (options.coordinateSystem === 'unreal') {
+                    for (let i = 0; i < positions.length; i += 3) {
+                        const x = positions[i];
+                        positions[i] = positions[i + 1];
+                        positions[i + 1] = positions[i + 2];
+                        positions[i + 2] = -x;
+                    }
+                }
                 const min = new Vec3();
                 const max = new Vec3();
                 BoundingBox.computeMinMax(positions, min, max);
@@ -845,6 +971,9 @@ class GltfExporter extends CoreExporter {
 
         // index buffer
         const indexBuffer = mesh.indexBuffer[0];
+        if (options.coordinateSystem === 'unreal' && !indexBuffer) {
+            throw new Error('Unreal glTF export requires indexed triangles');
+        }
         if (indexBuffer) {
             let bufferView = resources.bufferViewMap.get(indexBuffer);
             if (!bufferView) {
@@ -869,7 +998,7 @@ class GltfExporter extends CoreExporter {
         return primitive;
     }
 
-    writeSkins(resources, json) {
+    writeSkins(resources, json, options = {}) {
         if (resources.skins.length > 0) {
             json.skins = resources.skins.map((skin) => {
                 // Create float32 array for inverse bind matrices
@@ -881,6 +1010,9 @@ class GltfExporter extends CoreExporter {
 
                 // Create buffer view for matrices
                 const matrixBuffer = matrices.buffer;
+                if (options.coordinateSystem === 'unreal') {
+                    resources.bufferDataMap.set(matrixBuffer, convertUnrealInverseBindMatricesToGltf(matrixBuffer));
+                }
                 GltfExporter.writeBufferView(resources, json, matrixBuffer);
                 resources.buffers.push(matrixBuffer);
                 const bufferView = resources.bufferViewMap.get(matrixBuffer);
@@ -906,6 +1038,152 @@ class GltfExporter extends CoreExporter {
                     joints: joints
                 };
             });
+        }
+    }
+
+    /** @ignore */
+    writeAnimations(resources, json, options = {}) {
+        const tracks = options.animations;
+        if (tracks === undefined) return;
+        if (!Array.isArray(tracks)) {
+            throw new Error('GLB animations must be provided as an array of AnimTrack values');
+        }
+        if (tracks.length === 0) return;
+
+        const interpolationNames = new Map([
+            [INTERPOLATION_STEP, 'STEP'],
+            [INTERPOLATION_LINEAR, 'LINEAR'],
+            [INTERPOLATION_CUBIC, 'CUBICSPLINE']
+        ]);
+        const targetProperties = new Map([
+            ['localPosition', 'translation'],
+            ['localRotation', 'rotation'],
+            ['localScale', 'scale']
+        ]);
+        const addFloatAccessor = (data, type, count, min, max) => {
+            json.accessors = json.accessors ?? [];
+            resources.buffers.push(data);
+            GltfExporter.writeBufferView(resources, json, data);
+
+            const bufferView = resources.bufferViewMap.get(data)[0];
+            const accessor = {
+                bufferView,
+                componentType: 5126,
+                count,
+                type
+            };
+            if (min) accessor.min = min;
+            if (max) accessor.max = max;
+            return json.accessors.push(accessor) - 1;
+        };
+
+        json.animations = [];
+        for (const track of tracks) {
+            if (!track || !Array.isArray(track.inputs) || !Array.isArray(track.outputs) || !Array.isArray(track.curves)) {
+                throw new Error('GLB animations must contain valid AnimTrack values');
+            }
+            if (track.curves.length === 0) {
+                throw new Error(`GLB animation ${track.name || '(unnamed)'} has no transform curves`);
+            }
+
+            const animation = { samplers: [], channels: [] };
+            if (typeof track.name === 'string' && track.name.length > 0) {
+                animation.name = track.name;
+            }
+            const inputAccessorByIndex = new Map();
+            const outputAccessorByKey = new Map();
+            const channelTargets = new Set();
+
+            for (const curve of track.curves) {
+                const paths = curve.paths;
+                if (!Array.isArray(paths) || paths.length === 0) {
+                    throw new Error(`GLB animation ${track.name || '(unnamed)'} contains a curve with no target path`);
+                }
+
+                let property;
+                const nodeIndices = paths.map((path) => {
+                    if (path.component !== 'graph' || !Array.isArray(path.propertyPath) || path.propertyPath.length !== 1) {
+                        throw new Error('GLB animation export only supports graph transform curves');
+                    }
+                    const targetProperty = path.propertyPath[0];
+                    if (!targetProperties.has(targetProperty)) {
+                        throw new Error(`Unsupported GLB animation target property ${targetProperty}`);
+                    }
+                    if (property && property !== targetProperty) {
+                        throw new Error('GLB animation curves cannot share output data across different transform properties');
+                    }
+                    property = targetProperty;
+
+                    if (!Array.isArray(path.entityPath) || path.entityPath.length === 0 ||
+                        !path.entityPath.every(name => typeof name === 'string')) {
+                        throw new Error('GLB animation target paths must contain entity names');
+                    }
+                    return resolveAnimationNode(resources.entities, path.entityPath);
+                });
+
+                const gltfPath = targetProperties.get(property);
+                const expectedComponents = property === 'localRotation' ? 4 : 3;
+                const input = track.inputs[curve.input];
+                const output = track.outputs[curve.output];
+                if (!input || input.components !== 1 || !output || output.components !== expectedComponents) {
+                    throw new Error(`GLB animation ${property} curve has incompatible input or output components`);
+                }
+
+                const times = copyAnimationData(input.data, 'input');
+                if (times.length === 0) {
+                    throw new Error('GLB animation input data must contain at least one key time');
+                }
+                for (let index = 1; index < times.length; index++) {
+                    if (times[index] <= times[index - 1]) {
+                        throw new Error('GLB animation input key times must be strictly increasing');
+                    }
+                }
+
+                const interpolation = interpolationNames.get(curve.interpolation);
+                if (!interpolation) {
+                    throw new Error(`Unsupported GLB animation interpolation ${curve.interpolation}`);
+                }
+                const interpolationMultiplier = curve.interpolation === INTERPOLATION_CUBIC ? 3 : 1;
+                const values = convertAnimationOutputToGltf(output.data, property, options.coordinateSystem);
+                const expectedValueCount = times.length * expectedComponents * interpolationMultiplier;
+                if (values.length !== expectedValueCount) {
+                    throw new Error(`GLB animation ${property} curve has ${values.length} output values; expected ${expectedValueCount}`);
+                }
+
+                let inputAccessor = inputAccessorByIndex.get(curve.input);
+                if (inputAccessor === undefined) {
+                    inputAccessor = addFloatAccessor(times, 'SCALAR', times.length, [times[0]], [times[times.length - 1]]);
+                    inputAccessorByIndex.set(curve.input, inputAccessor);
+                }
+
+                const outputKey = `${curve.output}:${property}:${curve.interpolation}:${times.length}`;
+                let outputAccessor = outputAccessorByKey.get(outputKey);
+                if (outputAccessor === undefined) {
+                    const outputCount = times.length * interpolationMultiplier;
+                    outputAccessor = addFloatAccessor(values, `VEC${expectedComponents}`, outputCount);
+                    outputAccessorByKey.set(outputKey, outputAccessor);
+                }
+
+                const samplerIndex = animation.samplers.push({
+                    input: inputAccessor,
+                    output: outputAccessor,
+                    interpolation
+                }) - 1;
+
+                for (const nodeIndex of nodeIndices) {
+                    const channelKey = `${nodeIndex}:${gltfPath}`;
+                    if (channelTargets.has(channelKey)) {
+                        throw new Error(`GLB animation has duplicate ${gltfPath} channels for node ${nodeIndex}`);
+                    }
+                    channelTargets.add(channelKey);
+                    animation.channels.push({
+                        sampler: samplerIndex,
+                        target: { node: nodeIndex, path: gltfPath }
+                    });
+                }
+            }
+
+            json.animations.push(animation);
         }
     }
 
@@ -1043,12 +1321,13 @@ class GltfExporter extends CoreExporter {
                 scene: 0
             };
 
-            this.writeBufferViews(resources, json);
+            this.writeBufferViews(resources, json, options);
             this.writeCameras(resources, json);
             this.writeMeshes(resources, json, options);
             this.writeMaterials(resources, json);
             this.writeNodes(resources, json, options);
-            this.writeSkins(resources, json);
+            this.writeSkins(resources, json, options);
+            this.writeAnimations(resources, json, options);
             await this.writeTextures(resources, textureCanvases, json, options);
 
             // delete unused properties
@@ -1074,9 +1353,22 @@ class GltfExporter extends CoreExporter {
      * - Skinning data if no skinned meshes exist
      *
      * Defaults to false.
+     * @param {'legacy'|'unreal'} [options.coordinateSystem] - Overrides the root entity's
+     * coordinate convention. By default, Unreal hierarchies are converted to the glTF basis and
+     * legacy hierarchies are exported unchanged. Geometry is copied; source buffers are not
+     * modified. Only dense float32 spatial vertex attributes and indexed triangle-list meshes are
+     * supported by this conversion.
+     * @param {AnimTrack[]} [options.animations] - Explicit animation tracks to export. Only graph
+     * local-position, local-rotation and local-scale curves are supported; track paths must resolve
+     * uniquely inside the exported hierarchy. Interpolation, including cubic tangents, is preserved.
      * @returns {Promise<ArrayBuffer>} - The GLB file content.
      */
     build(entity, options = {}) {
+        const coordinateSystem = options.coordinateSystem ?? entity.coordinateSystem ?? 'unreal';
+        if (!['legacy', 'unreal'].includes(coordinateSystem)) {
+            throw new Error(`Unsupported glTF export coordinate system ${coordinateSystem}`);
+        }
+        options = { ...options, coordinateSystem };
         const resources = this.collectResources(entity);
 
         return this.buildJson(resources, options).then((json) => {
@@ -1139,11 +1431,17 @@ class GltfExporter extends CoreExporter {
 
                     const bufferOffset = json.bufferViews[bufferViewId].byteOffset;
 
-                    if (buffer instanceof ArrayBuffer) {
+                    const convertedBuffer = resources.bufferDataMap.get(buffer);
+                    if (convertedBuffer) {
+                        src = isArrayBuffer(convertedBuffer) ? new Uint8Array(convertedBuffer) :
+                            new Uint8Array(convertedBuffer.buffer, convertedBuffer.byteOffset, convertedBuffer.byteLength);
+                    } else if (isArrayBuffer(buffer)) {
                         src = new Uint8Array(buffer);
+                    } else if (ArrayBuffer.isView(buffer)) {
+                        src = new Uint8Array(buffer.buffer, buffer.byteOffset, buffer.byteLength);
                     } else {
                         const srcBuffer = buffer.lock();
-                        if (srcBuffer instanceof ArrayBuffer) {
+                        if (isArrayBuffer(srcBuffer)) {
                             src = new Uint8Array(srcBuffer);
                         } else {
                             src = new Uint8Array(srcBuffer.buffer, srcBuffer.byteOffset, srcBuffer.byteLength);

@@ -272,8 +272,12 @@ class ForwardRenderer extends Renderer {
 
             this.lightColorId[cnt].setValue(directional._colorLinear);
 
-            // Directional lights shine down the negative Y axis
-            wtm.getY(directional._direction).mulScalar(-1);
+            // Unreal light components emit along local +X; legacy PlayCanvas lights use -Y.
+            if (directional._node.coordinateSystem === 'unreal') {
+                wtm.getX(directional._direction);
+            } else {
+                wtm.getY(directional._direction).mulScalar(-1);
+            }
             directional._direction.normalize();
             this.lightDir[cnt][0] = directional._direction.x;
             this.lightDir[cnt][1] = directional._direction.y;
@@ -445,8 +449,12 @@ class ForwardRenderer extends Renderer {
             this.setLTCPositionalLight(wtm, cnt);
         }
 
-        // Spots shine down the negative Y axis
-        wtm.getY(spot._direction).mulScalar(-1);
+        // Unreal light components emit along local +X; legacy PlayCanvas lights use -Y.
+        if (spot._node.coordinateSystem === 'unreal') {
+            wtm.getX(spot._direction);
+        } else {
+            wtm.getY(spot._direction).mulScalar(-1);
+        }
         spot._direction.normalize();
         this.lightDir[cnt][0] = spot._direction.x;
         this.lightDir[cnt][1] = spot._direction.y;
@@ -908,8 +916,8 @@ class ForwardRenderer extends Renderer {
             this.clear(camera, clearColor, clearDepth, clearStencil);
         }
 
-        // enable flip faces if either the camera has _flipFaces enabled or the render target has flipY enabled
-        const flipFaces = !!(camera._flipFaces ^ renderTarget?.flipY);
+        // enable flip faces if the camera basis is mirrored, the camera requests a flip, or the target flips Y
+        const flipFaces = !!(camera._flipFaces ^ (camera.coordinateSystem === 'unreal') ^ renderTarget?.flipY);
 
         const forwardDrawCalls = this._forwardDrawCalls;
         this.renderForward(camera,

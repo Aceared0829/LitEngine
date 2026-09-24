@@ -145,6 +145,14 @@ describe('ParticleSystemComponent', function () {
         expect(c.drawOrder).to.equal(0);
     });
 
+    it('defaults the world particle normal to Unreal up on Unreal-coordinate entities', function () {
+        const entity = new Entity();
+        entity.coordinateSystem = 'unreal';
+        entity.addComponent('particlesystem');
+
+        expect(entity.particlesystem.particleNormal.equals(new Vec3(0, 0, 1))).to.be.true;
+    });
+
     it('Add particlesystem with enabled false', function () {
         const e = new Entity();
 

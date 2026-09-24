@@ -412,6 +412,9 @@ class Entity extends GraphNode {
 
         Debug.assert(app, 'Could not find current application');
         this._app = app;
+        if (app?.coordinateSystem) {
+            this.coordinateSystem = app.coordinateSystem;
+        }
     }
 
     /**

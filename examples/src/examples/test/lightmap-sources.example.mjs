@@ -61,6 +61,7 @@ createOptions.componentSystems = [
 createOptions.resourceHandlers = [TextureHandler, FontHandler];
 
 const app = new AppBase(canvas);
+app.coordinateSystem = 'legacy';
 app.init(createOptions);
 app.setCanvasFillMode(FILLMODE_FILL_WINDOW);
 app.setCanvasResolution(RESOLUTION_AUTO);

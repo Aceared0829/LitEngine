@@ -411,11 +411,13 @@ class OutlineRenderer {
         });
 
         // copy the transform
+        this.outlineCameraEntity.coordinateSystem = sceneCameraEntity.coordinateSystem;
         this.outlineCameraEntity.setLocalPosition(sceneCameraEntity.getPosition());
         this.outlineCameraEntity.setLocalRotation(sceneCameraEntity.getRotation());
 
         // copy other properties from the scene camera
         const outlineCamera = this.outlineCameraEntity.camera;
+        outlineCamera.coordinateSystem = sceneCamera.coordinateSystem;
         outlineCamera.projection = sceneCamera.projection;
         outlineCamera.horizontalFov = sceneCamera.horizontalFov;
         outlineCamera.fov = sceneCamera.fov;

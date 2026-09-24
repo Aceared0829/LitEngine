@@ -58,6 +58,7 @@ appOptions.componentSystems = [RenderComponentSystem, CameraComponentSystem];
 appOptions.resourceHandlers = [TextureHandler];
 
 const app = new AppBase(canvas);
+app.coordinateSystem = 'legacy';
 app.init(appOptions);
 
 await new Promise((resolve) => {

@@ -1,6 +1,9 @@
 import { EventHandler } from '../../core/event-handler.js';
 import { platform } from '../../core/platform.js';
+import { Quat } from '../../core/math/quat.js';
+import { Vec3 } from '../../core/math/vec3.js';
 import { XrAnchor } from './xr-anchor.js';
+import { copyEngineRotationToXr, copyEngineVectorToXr } from './xr-coordinate.js';
 
 /**
  * @import { Quat } from '../../core/math/quat.js'
@@ -290,8 +293,12 @@ class XrAnchors extends EventHandler {
                 this.fire('error', ex);
             });
         } else {
+            const xrPosition = copyEngineVectorToXr(this.manager, position, new Vec3());
             this._creationQueue.push({
-                transform: new XRRigidTransform(position, rotation),
+                transform: rotation ? new XRRigidTransform(
+                    xrPosition,
+                    copyEngineRotationToXr(this.manager, rotation, new Quat())
+                ) : new XRRigidTransform(xrPosition),
                 callback: callback
             });
         }

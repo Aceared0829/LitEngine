@@ -43,6 +43,7 @@ const _properties = [
     'clearDepth',
     'clearDepthBuffer',
     'clearStencilBuffer',
+    'coordinateSystem',
     'renderSceneColorMap',
     'renderSceneDepthMap',
     'cullFaces',

@@ -4,6 +4,7 @@ import { Entity } from '../../../framework/entity.js';
 import { BoxGeometry } from '../../../scene/geometry/box-geometry.js';
 import { CylinderGeometry } from '../../../scene/geometry/cylinder-geometry.js';
 import { Mesh } from '../../../scene/mesh.js';
+import { setLegacyLocalEulerAngles } from '../coordinate-utils.js';
 import { TriData } from '../tri-data.js';
 import { Shape } from './shape.js';
 
@@ -232,7 +233,7 @@ class BoxLineShape extends Shape {
         }
 
         this._line.enabled = !this._flipped;
-        this.entity.setLocalEulerAngles(tmpV1);
+        setLegacyLocalEulerAngles(this.entity, tmpV1);
     }
 
     /**

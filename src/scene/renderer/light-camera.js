@@ -1,10 +1,21 @@
 import { Quat } from '../../core/math/quat.js';
 import { Vec3 } from '../../core/math/vec3.js';
 import { Mat4 } from '../../core/math/mat4.js';
+import { legacyToUnrealRotation } from '../../core/math/coordinate-conversion.js';
 
 import { ASPECT_MANUAL, LIGHTTYPE_DIRECTIONAL, LIGHTTYPE_OMNI, LIGHTTYPE_SPOT, PROJECTION_ORTHOGRAPHIC, PROJECTION_PERSPECTIVE } from '../constants.js';
 import { Camera } from '../camera.js';
 import { GraphNode } from '../graph-node.js';
+
+const pointLightRotations = [
+    new Quat().setFromEulerAngles(0, 90, 180),
+    new Quat().setFromEulerAngles(0, -90, 180),
+    new Quat().setFromEulerAngles(90, 0, 0),
+    new Quat().setFromEulerAngles(-90, 0, 0),
+    new Quat().setFromEulerAngles(0, 180, 180),
+    new Quat().setFromEulerAngles(0, 0, 180)
+];
+const pointLightRotationsUnreal = pointLightRotations.map(rotation => legacyToUnrealRotation(rotation));
 
 const _viewMat = new Mat4();
 const _viewProjMat = new Mat4();
@@ -13,19 +24,14 @@ const _viewportMatrix = new Mat4();
 // helper static class for shared functionality for shadow and cookie cameras used by the lights
 class LightCamera {
     // camera rotation angles used when rendering cubemap faces
-    static pointLightRotations = [
-        new Quat().setFromEulerAngles(0, 90, 180),
-        new Quat().setFromEulerAngles(0, -90, 180),
-        new Quat().setFromEulerAngles(90, 0, 0),
-        new Quat().setFromEulerAngles(-90, 0, 0),
-        new Quat().setFromEulerAngles(0, 180, 180),
-        new Quat().setFromEulerAngles(0, 0, 180)
-    ];
+    static pointLightRotations = pointLightRotations;
 
-    static create(device, name, lightType, face) {
+    static create(device, name, lightType, face, coordinateSystem = 'legacy') {
 
         const camera = new Camera(device);
         camera.node = new GraphNode(name);
+        camera.coordinateSystem = coordinateSystem;
+        camera.node.coordinateSystem = coordinateSystem;
         camera.aspectRatio = 1;
         camera.aspectRatioMode = ASPECT_MANUAL;
         camera._scissorRectClear = true;
@@ -33,7 +39,7 @@ class LightCamera {
         // set up constant settings based on light type
         switch (lightType) {
             case LIGHTTYPE_OMNI:
-                camera.node.setRotation(LightCamera.pointLightRotations[face]);
+                camera.node.setRotation(coordinateSystem === 'unreal' ? pointLightRotationsUnreal[face] : pointLightRotations[face]);
                 camera.fov = 90;
                 camera.projection = PROJECTION_PERSPECTIVE;
                 break;
@@ -58,9 +64,12 @@ class LightCamera {
 
         let cookieCamera = LightCamera._spotCookieCamera;
         if (!cookieCamera) {
-            cookieCamera = LightCamera.create(light.device, 'SpotCookieCamera', LIGHTTYPE_SPOT);
+            cookieCamera = LightCamera.create(light.device, 'SpotCookieCamera', LIGHTTYPE_SPOT, undefined, light._node.coordinateSystem);
             LightCamera._spotCookieCamera = cookieCamera;
         }
+
+        cookieCamera.coordinateSystem = light._node.coordinateSystem;
+        cookieCamera.node.coordinateSystem = light._node.coordinateSystem;
 
         cookieCamera.fov = light._outerConeAngle * 2;
 

@@ -38,6 +38,7 @@ options.graphicsDevice = device;
 options.componentSystems = [CameraComponentSystem, SpriteComponentSystem];
 
 const app = new AppBase(canvas);
+app.coordinateSystem = 'legacy';
 app.init(options);
 app.setCanvasFillMode(FILLMODE_FILL_WINDOW);
 app.setCanvasResolution(RESOLUTION_AUTO);

@@ -6,6 +6,7 @@ import { CylinderGeometry } from '../../scene/geometry/cylinder-geometry.js';
 import { ShaderMaterial } from '../../scene/materials/shader-material.js';
 import { MeshInstance } from '../../scene/mesh-instance.js';
 import { Mesh } from '../../scene/mesh.js';
+import { setLegacyLocalEulerAngles } from './coordinate-utils.js';
 import { unlitShader } from './shaders.js';
 
 /**
@@ -83,7 +84,7 @@ class MeshLine {
         const dir = tmpV1.sub2(to, from).normalize();
         const elev = Math.atan2(-dir.y, Math.sqrt(dir.x * dir.x + dir.z * dir.z)) * math.RAD_TO_DEG;
         const azim = Math.atan2(-dir.x, -dir.z) * math.RAD_TO_DEG;
-        this.entity.setLocalEulerAngles(-elev + 90, azim, 0);
+        setLegacyLocalEulerAngles(this.entity, -elev + 90, azim, 0);
 
         const length = from.distance(to) * scale;
         this.entity.setLocalPosition(dir.mulScalar(0.5 * length).add(from));

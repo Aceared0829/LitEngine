@@ -7,7 +7,7 @@ import { Entity } from '../../../entity.js';
 // https://github.com/KhronosGroup/glTF/tree/main/extensions/2.0/Khronos/KHR_lights_punctual
 
 // creates light component, adds it to the node and returns the created light component
-const createLight = (gltfLight, node, app) => {
+const createLight = (gltfLight, node, app, coordinateSystem) => {
     const lightProps = {
         enabled: false,
         type: gltfLight.type === 'point' ? 'omni' : gltfLight.type,
@@ -40,7 +40,10 @@ const createLight = (gltfLight, node, app) => {
     // Rotate to match light orientation in glTF specification
     // Note that this adds a new entity node into the hierarchy that does not exist in the gltf hierarchy
     const lightEntity = new Entity(node.name, app);
-    lightEntity.rotateLocal(90, 0, 0);
+    lightEntity.coordinateSystem = coordinateSystem;
+    if (coordinateSystem === 'legacy') {
+        lightEntity.rotateLocal(90, 0, 0);
+    }
 
     lightEntity.addComponent('light', lightProps);
     return lightEntity;
@@ -49,6 +52,7 @@ const createLight = (gltfLight, node, app) => {
 const createLights = (gltf, nodes, options, app) => {
 
     let lights = null;
+    const coordinateSystem = options?.coordinateSystem ?? 'unreal';
 
     if (gltf.hasOwnProperty('nodes') && gltf.hasOwnProperty('extensions') &&
         gltf.extensions.hasOwnProperty('KHR_lights_punctual') && gltf.extensions.KHR_lights_punctual.hasOwnProperty('lights')) {
@@ -74,7 +78,7 @@ const createLights = (gltf, nodes, options, app) => {
                         }
                         const light = process ?
                             process(gltfLight, nodes[nodeIndex]) :
-                            createLight(gltfLight, nodes[nodeIndex], app);
+                            createLight(gltfLight, nodes[nodeIndex], app, coordinateSystem);
                         if (postprocess) {
                             postprocess(gltfLight, light);
                         }

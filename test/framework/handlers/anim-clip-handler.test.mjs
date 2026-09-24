@@ -67,7 +67,7 @@ describe('AnimClipHandler', function () {
     });
 
     it('open builds an AnimTrack from the clip data', function () {
-        const handler = new AnimClipHandler({});
+        const handler = new AnimClipHandler({ coordinateSystem: 'legacy' });
         const track = handler.open('x.json', clipData);
         expect(track).to.be.an.instanceof(AnimTrack);
         expect(track.name).to.equal('test-clip');

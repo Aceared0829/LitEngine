@@ -95,6 +95,7 @@ createOptions.componentSystems = [
 createOptions.resourceHandlers = [ScriptHandler, TextureHandler, ContainerHandler, FontHandler];
 
 const app = new AppBase(canvas);
+app.coordinateSystem = 'legacy';
 app.init(createOptions);
 
 const textures = new TextureRenderer(app);

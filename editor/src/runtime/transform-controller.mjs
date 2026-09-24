@@ -2,7 +2,8 @@ import {
     Gizmo,
     RotateGizmo,
     ScaleGizmo,
-    TranslateGizmo
+    TranslateGizmo,
+    unrealRotationToEuler
 } from 'playcanvas';
 
 /**
@@ -250,7 +251,7 @@ export class TransformController {
         }
         return {
             position: this.#entity.getLocalPosition().toArray(),
-            rotation: this.#entity.getLocalEulerAngles().toArray(),
+            rotation: unrealRotationToEuler(this.#entity.getLocalRotation()).toArray(),
             scale: this.#entity.getLocalScale().toArray()
         };
     }

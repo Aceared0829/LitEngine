@@ -244,6 +244,8 @@ class InputConsumer {
  * from, {@link update} applies a frame and returns the current pose, and {@link detach} releases
  * it. The application applies the returned pose to an entity. {@link FlyController},
  * {@link OrbitController} and {@link FocusController} implement three ways of doing this.
+ * A controller adopts the rotation and forward-axis convention of the {@link Pose#coordinateSystem}
+ * supplied to {@link attach}.
  *
  * @example
  * controller.attach(pose.look(cameraPosition, target));

@@ -50,6 +50,12 @@ export function InspectorPanel({ state, dispatch, ready, collapsed }) {
         });
     };
 
+    const scrubSteps = {
+        position: { step: 0.01, precision: 2 },
+        rotation: { step: 1, precision: 0 },
+        scale: { step: 0.01, precision: 2 }
+    };
+
     const vector = (label, field, unit) => jsx(
         'div',
         { className: 'inspector-field', key: field },
@@ -70,13 +76,30 @@ export function InspectorPanel({ state, dispatch, ready, collapsed }) {
         ),
         jsx('div', { className: `transform-vector transform-vector-${field}`, key: entity.id },
             ...entity.transform[field].map((value, index) => jsx('div', { className: 'pcui-numeric-input', key: index },
+                jsx('span', { className: 'transform-axis-label' }, field === 'rotation' ? ['Roll X', 'Pitch Y', 'Yaw Z'][index] : 'XYZ'[index]),
                 jsx(NumberField, {
                     value,
-                    label: `${label} ${'XYZ'[index]}`,
+                    label: field === 'rotation' ? `${['Roll X', 'Pitch Y', 'Yaw Z'][index]} (°)` : `${label} ${'XYZ'[index]}`,
                     onCommit: (component) => {
-                        const vector = transformRef.current[field].slice();
+                        const current = transformRef.current;
+                        if (selectionRef.current !== entity.id || !current) {
+                            return;
+                        }
+                        const vector = current[field].slice();
                         vector[index] = component;
                         updateTransform(entity.id, field, vector);
+                    },
+                    scrub: {
+                        ...scrubSteps[field],
+                        onStart: gestureId => dispatch({ type: 'beginTransformDrag', entityId: entity.id, gestureId }),
+                        onPreview: (gestureId, component) => {
+                            if (selectionRef.current !== entity.id || !Number.isFinite(component)) {
+                                return;
+                            }
+                            dispatch({ type: 'previewTransformDrag', entityId: entity.id, gestureId, field, index, value: component });
+                        },
+                        onEnd: gestureId => dispatch({ type: 'endTransformDrag', entityId: entity.id, gestureId, label: `Edit ${field}` }),
+                        onCancel: gestureId => dispatch({ type: 'cancelTransformDrag', entityId: entity.id, gestureId })
                     }
                 })
             ))
@@ -101,7 +124,7 @@ export function InspectorPanel({ state, dispatch, ready, collapsed }) {
                 onClick: () => setTransformExpanded(!transformExpanded)
             }, jsx('span', null, transformExpanded ? '⌄' : '›'), ' Transform'),
             transformExpanded && jsx('div', { className: 'transform-fields' },
-                vector('Location', 'position', 'cm'),
+                vector('Location', 'position', 'units'),
                 vector('Rotation', 'rotation', '°'),
                 vector('Scale', 'scale', '×')
             )

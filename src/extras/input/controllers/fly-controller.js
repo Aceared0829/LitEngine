@@ -12,6 +12,9 @@ const angles = new Vec3();
 const forward = new Vec3();
 const right = new Vec3();
 const up = new Vec3();
+const unrealForward = new Vec3(1, 0, 0);
+const unrealRight = new Vec3(0, 1, 0);
+const unrealUp = new Vec3(0, 0, 1);
 
 const rotation = new Quat();
 
@@ -66,6 +69,7 @@ class FlyController extends InputController {
      * @param {boolean} [smooth] - Whether to smooth the transition.
      */
     attach(pose, smooth = true) {
+        this._pose.coordinateSystem = pose.coordinateSystem;
         this._targetPose.copy(pose);
 
         if (!smooth) {
@@ -86,13 +90,14 @@ class FlyController extends InputController {
         const { move, rotate } = frame.read();
 
         // rotate
-        this._targetPose.rotate(angles.set(-rotate[1], -rotate[0], 0));
+        const unrealCoordinates = this._pose.coordinateSystem === 'unreal';
+        this._targetPose.rotate(unrealCoordinates ? angles.set(0, -rotate[1], -rotate[0]) : angles.set(-rotate[1], -rotate[0], 0));
 
         // move
-        rotation.setFromEulerAngles(this._pose.angles);
-        rotation.transformVector(Vec3.FORWARD, forward);
-        rotation.transformVector(Vec3.RIGHT, right);
-        rotation.transformVector(Vec3.UP, up);
+        this._pose.getRotation(rotation);
+        rotation.transformVector(unrealCoordinates ? unrealForward : Vec3.FORWARD, forward);
+        rotation.transformVector(unrealCoordinates ? unrealRight : Vec3.RIGHT, right);
+        rotation.transformVector(unrealCoordinates ? unrealUp : Vec3.UP, up);
         offset.set(0, 0, 0);
         offset.add(forward.mulScalar(move[2]));
         offset.add(right.mulScalar(move[0]));

@@ -73,6 +73,7 @@ createOptions.componentSystems = [
 createOptions.resourceHandlers = [ScriptHandler, TextureHandler, CubemapHandler];
 
 const app = new AppBase(canvas);
+app.coordinateSystem = 'legacy';
 app.init(createOptions);
 
 const textures = new TextureRenderer(app);

@@ -23,6 +23,6 @@ fn calcSpawnPosition(inBounds: vec3f, rndFactor: f32) -> vec3f {
 }
 
 fn addInitialVelocity(localVelocity: ptr<function, vec3f>, inBounds: vec3f) {
-    *localVelocity = *localVelocity - vec3f(0.0, 0.0, uniform.initialVelocity);
+    *localVelocity = *localVelocity + uniform.initialVelocityDirection * uniform.initialVelocity;
 }
 `;

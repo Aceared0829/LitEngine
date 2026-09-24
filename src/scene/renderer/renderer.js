@@ -398,6 +398,7 @@ class Renderer {
                 const rot = camera._node.getRotation();
                 viewInvMat.setTRS(pos, rot, Vec3.ONE);
             }
+            camera.getViewInverseMatrix(viewInvMat, viewInvMat);
             this.viewInvId.setValue(viewInvMat.data);
 
             // View Matrix

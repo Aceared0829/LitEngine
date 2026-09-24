@@ -767,6 +767,7 @@ async function runBenchmark(config, colIndex, budgetIndices) {
     createOptions.resourceHandlers = [TextureHandler, ContainerHandler, ScriptHandler, GSplatHandler];
 
     const app = new AppBase(canvas);
+app.coordinateSystem = 'legacy';
     app.init(createOptions);
     app.setCanvasFillMode(FILLMODE_FILL_WINDOW);
     app.setCanvasResolution(RESOLUTION_AUTO);

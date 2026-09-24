@@ -36,6 +36,7 @@ createOptions.graphicsDevice = device;
 createOptions.componentSystems = [RenderComponentSystem, CameraComponentSystem, LightComponentSystem];
 
 const app = new AppBase(canvas);
+app.coordinateSystem = 'legacy';
 app.init(createOptions);
 
 app.setCanvasFillMode(FILLMODE_FILL_WINDOW);

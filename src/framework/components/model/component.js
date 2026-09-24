@@ -254,6 +254,9 @@ class ModelComponent extends Component {
      *   has poles at Y = -0.5 and Y = +0.5.
      * - **"torus"**: A doughnut shape lying in the local XZ plane at Y = 0. It is centered at
      *   the local space origin with a tube radius of 0.2 and a ring radius of 0.3.
+     * When the owning entity's `coordinateSystem` is `'unreal'` before this type is assigned,
+     * primitive axes use +X forward, +Y right and +Z up. The plane and torus lie in XY, while
+     * capsule, cone, cylinder and sphere poles follow Z. Asset geometry is not converted here.
      *
      * @type {'asset'|'box'|'capsule'|'cone'|'cylinder'|'plane'|'sphere'|'torus'}
      */
@@ -273,7 +276,7 @@ class ModelComponent extends Component {
         } else {
 
             // get / create mesh of type
-            const primData = getShapePrimitive(this.system.app.graphicsDevice, value);
+            const primData = getShapePrimitive(this.system.app.graphicsDevice, value, this.entity.coordinateSystem);
             this._area = primData.area;
             const mesh = primData.mesh;
 

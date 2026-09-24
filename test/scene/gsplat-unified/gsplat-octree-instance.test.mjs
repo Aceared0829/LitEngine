@@ -38,6 +38,7 @@ const makeInstance = (octree, lodMode = GSPLAT_LODMODE_ERROR) => {
 // A camera node at the origin looking down -z. Only the properties the coverage pass reads.
 const makeCamera = (projection, orthoHeight = 5) => {
     const node = new GraphNode();
+    node.coordinateSystem = 'legacy';
     node.camera = { projection, fov: 45, horizontalFov: false, aspectRatio: 1, orthoHeight };
     return node;
 };

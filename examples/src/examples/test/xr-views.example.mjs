@@ -77,6 +77,7 @@ createOptions.componentSystems = [
 createOptions.resourceHandlers = [TextureHandler, ContainerHandler, ScriptHandler];
 
 const app = new AppBase(canvas);
+app.coordinateSystem = 'legacy';
 app.init(createOptions);
 
 // Composite pass that samples a 4-layer texture array and writes the layers into a 2x2 grid on

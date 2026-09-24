@@ -1,6 +1,7 @@
 import { EventHandler } from '../../core/event-handler.js';
 import { Vec3 } from '../../core/math/vec3.js';
 import { Quat } from '../../core/math/quat.js';
+import { copyXrRotationToEngine, copyXrVectorToEngine } from './xr-coordinate.js';
 
 /**
  * The tracked image interface that is created by the Image Tracking system and is provided as a
@@ -198,7 +199,7 @@ class XrTrackedImage extends EventHandler {
      * entity.setPosition(trackedImage.getPosition());
      */
     getPosition() {
-        if (this._pose) this._position.copy(this._pose.transform.position);
+        if (this._pose) copyXrVectorToEngine(this._imageTracking._manager, this._pose.transform.position, this._position);
         return this._position;
     }
 
@@ -211,7 +212,7 @@ class XrTrackedImage extends EventHandler {
      * entity.setRotation(trackedImage.getRotation());
      */
     getRotation() {
-        if (this._pose) this._rotation.copy(this._pose.transform.orientation);
+        if (this._pose) copyXrRotationToEngine(this._imageTracking._manager, this._pose.transform.orientation, this._rotation);
         return this._rotation;
     }
 }

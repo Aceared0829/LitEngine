@@ -65,6 +65,7 @@ createOptions.componentSystems = [
 ];
 
 const app = new AppBase(canvas);
+app.coordinateSystem = 'legacy';
 app.init(createOptions);
 
 app.start();

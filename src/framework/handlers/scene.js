@@ -1,5 +1,6 @@
 import { SceneUtils } from './scene-utils.js';
 import { SceneParser } from '../parsers/scene.js';
+import { migrateLegacySceneTransforms, previewMigratedSceneTransforms } from '../parsers/scene-coordinate-migration.js';
 import { ResourceHandler } from './handler.js';
 
 /**
@@ -28,6 +29,15 @@ class SceneHandler extends ResourceHandler {
     }
 
     open(url, data) {
+        if (this._app.coordinateSystem === 'unreal') {
+            if (!data || !Object.hasOwn(data, 'coordinateMigration')) {
+                throw new Error('Unreal coordinate mode requires scene data migrated with migrateLegacySceneTransforms()');
+            }
+            data = migrateLegacySceneTransforms(data);
+        } else if (data && Object.hasOwn(data, 'coordinateMigration')) {
+            data = previewMigratedSceneTransforms(data);
+        }
+
         // prevent script initialization until entire scene is open
         this._app.systems.script.preloading = true;
 

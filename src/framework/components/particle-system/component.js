@@ -11,6 +11,8 @@ import { Component } from '../component.js';
  * @import { Curve } from '../../../core/math/curve.js'
  * @import { EventHandle } from '../../../core/event-handle.js'
  * @import { Texture } from '../../../platform/graphics/texture.js'
+ * @import { Entity } from '../../entity.js'
+ * @import { ParticleSystemComponentSystem } from './system.js'
  */
 
 const ASSET_PROPERTIES = ['colorMapAsset', 'normalMapAsset', 'meshAsset', 'renderAsset'];
@@ -436,6 +438,20 @@ class ParticleSystemComponent extends Component {
      * @private
      */
     _layers = [LAYERID_WORLD];
+
+    /**
+     * Create a ParticleSystemComponent.
+     *
+     * @param {ParticleSystemComponentSystem} system - The owning component system.
+     * @param {Entity} entity - The entity that owns the component.
+     */
+    constructor(system, entity) {
+        super(system, entity);
+
+        if (entity.coordinateSystem === 'unreal') {
+            this._particleNormal.set(0, 0, 1);
+        }
+    }
 
     /**
      * Sets whether the particle system plays automatically on creation. If set to false, it is

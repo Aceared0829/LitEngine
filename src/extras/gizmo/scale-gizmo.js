@@ -5,6 +5,7 @@ import { TransformGizmo } from './transform-gizmo.js';
 import { BoxShape } from './shape/box-shape.js';
 import { PlaneShape } from './shape/plane-shape.js';
 import { BoxLineShape } from './shape/boxline-shape.js';
+import { getWorldAxes } from './coordinate-utils.js';
 
 /**
  * @import { CameraComponent } from '../../framework/components/camera/component.js'
@@ -18,6 +19,9 @@ const v1 = new Vec3();
 const v2 = new Vec3();
 const point = new Vec3();
 const delta = new Vec3();
+const axisX = new Vec3();
+const axisY = new Vec3();
+const axisZ = new Vec3();
 const q = new Quat();
 
 // constants
@@ -411,60 +415,51 @@ class ScaleGizmo extends TransformGizmo {
     /** @private */
     _shapesLookAtCamera() {
         const cameraDir = this.cameraDir;
+        getWorldAxes(this.root, axisX, axisY, axisZ);
 
         // axes
         let changed = false;
-        let dot, enabled;
-        dot = cameraDir.dot(this.root.right);
-        enabled = 1 - Math.abs(dot) > GLANCE_EPSILON;
-        if (this._shapes.x.entity.enabled !== enabled) {
-            this._shapes.x.entity.enabled = enabled;
+        const xEnabled = 1 - Math.abs(cameraDir.dot(axisX)) > GLANCE_EPSILON;
+        const yEnabled = 1 - Math.abs(cameraDir.dot(axisY)) > GLANCE_EPSILON;
+        const zEnabled = 1 - Math.abs(cameraDir.dot(axisZ)) > GLANCE_EPSILON;
+        if (this._shapes.x.entity.enabled !== xEnabled) {
+            this._shapes.x.entity.enabled = xEnabled;
             changed = true;
         }
-        dot = cameraDir.dot(this.root.up);
-        enabled = 1 - Math.abs(dot) > GLANCE_EPSILON;
-        if (this._shapes.y.entity.enabled !== enabled) {
-            this._shapes.y.entity.enabled = enabled;
+        if (this._shapes.y.entity.enabled !== yEnabled) {
+            this._shapes.y.entity.enabled = yEnabled;
             changed = true;
         }
-        dot = cameraDir.dot(this.root.forward);
-        enabled = 1 - Math.abs(dot) > GLANCE_EPSILON;
-        if (this._shapes.z.entity.enabled !== enabled) {
-            this._shapes.z.entity.enabled = enabled;
+        if (this._shapes.z.entity.enabled !== zEnabled) {
+            this._shapes.z.entity.enabled = zEnabled;
             changed = true;
         }
 
-        // planes
+        // Keep only the plane quadrant facing the camera.
         let flipped;
-        v1.cross(cameraDir, this.root.right);
-        enabled = 1 - v1.length() > GLANCE_EPSILON;
-        if (this._shapes.yz.entity.enabled !== enabled) {
-            this._shapes.yz.entity.enabled = enabled;
+        if (this._shapes.yz.entity.enabled !== xEnabled) {
+            this._shapes.yz.entity.enabled = xEnabled;
             changed = true;
         }
-        flipped = this.flipPlanes ? v2.set(0, +(v1.dot(this.root.forward) < 0), +(v1.dot(this.root.up) < 0)) : Vec3.ZERO;
+        flipped = this.flipPlanes ? v2.set(0, +(cameraDir.dot(axisY) < 0), +(cameraDir.dot(axisZ) < 0)) : Vec3.ZERO;
         if (!this._shapes.yz.flipped.equals(flipped)) {
             this._shapes.yz.flipped = flipped;
             changed = true;
         }
-        v1.cross(cameraDir, this.root.forward);
-        enabled = 1 - v1.length() > GLANCE_EPSILON;
-        if (this._shapes.xy.entity.enabled !== enabled) {
-            this._shapes.xy.entity.enabled = enabled;
+        if (this._shapes.xy.entity.enabled !== zEnabled) {
+            this._shapes.xy.entity.enabled = zEnabled;
             changed = true;
         }
-        flipped = this.flipPlanes ? v2.set(+(v1.dot(this.root.up) < 0), +(v1.dot(this.root.right) > 0), 0) : Vec3.ZERO;
+        flipped = this.flipPlanes ? v2.set(+(cameraDir.dot(axisX) < 0), +(cameraDir.dot(axisY) < 0), 0) : Vec3.ZERO;
         if (!this._shapes.xy.flipped.equals(flipped)) {
             this._shapes.xy.flipped = flipped;
             changed = true;
         }
-        v1.cross(cameraDir, this.root.up);
-        enabled = 1 - v1.length() > GLANCE_EPSILON;
-        if (this._shapes.xz.entity.enabled !== enabled) {
-            this._shapes.xz.entity.enabled = enabled;
+        if (this._shapes.xz.entity.enabled !== yEnabled) {
+            this._shapes.xz.entity.enabled = yEnabled;
             changed = true;
         }
-        flipped = this.flipPlanes ? v2.set(+(v1.dot(this.root.forward) > 0), 0, +(v1.dot(this.root.right) > 0)) : Vec3.ZERO;
+        flipped = this.flipPlanes ? v2.set(+(cameraDir.dot(axisX) < 0), 0, +(cameraDir.dot(axisZ) < 0)) : Vec3.ZERO;
         if (!this._shapes.xz.flipped.equals(flipped)) {
             this._shapes.xz.flipped = flipped;
             changed = true;

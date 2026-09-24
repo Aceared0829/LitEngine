@@ -108,6 +108,20 @@ describe('LayoutGroupComponent', function () {
         expect(entity0.layoutgroup.reflow.callCount).to.equal(1);
     });
 
+    it('uses top-left flow defaults for the Unreal UI coordinate system', function () {
+        const unrealApp = createApp({ coordinateSystem: 'unreal' });
+        try {
+            const entity = new Entity('unreal-layout-group', unrealApp);
+            entity.addComponent('layoutgroup');
+
+            expect(entity.layoutgroup.reverseY).to.equal(false);
+            expect(entity.layoutgroup.alignment.x).to.equal(0);
+            expect(entity.layoutgroup.alignment.y).to.equal(0);
+        } finally {
+            unrealApp.destroy();
+        }
+    });
+
     ['self', 'child'].forEach((targetName) => {
         ['element', 'layoutchild'].forEach((changedType) => {
             describe(`${changedType} lifecycle on ${targetName}`, function () {

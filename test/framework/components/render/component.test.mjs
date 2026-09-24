@@ -20,6 +20,16 @@ describe('RenderComponent', function () {
         jsdomTeardown();
     });
 
+    it('uses an XY plane when the entity opts into Unreal coordinates before component creation', function () {
+        const entity = new Entity();
+        entity.coordinateSystem = 'unreal';
+        entity.addComponent('render', { type: 'plane' });
+
+        const normals = [];
+        entity.render.meshInstances[0].mesh.getNormals(normals);
+        expect(normals.slice(0, 3).map(value => value || 0)).to.deep.equal([0, 0, 1]);
+    });
+
     describe('#onBeforeRemove', function () {
 
         it('unsubscribes from all four entity hierarchy events', function () {

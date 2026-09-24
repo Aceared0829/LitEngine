@@ -3,6 +3,7 @@ import { Color } from '../../core/math/color.js';
 import { Mat4 } from '../../core/math/mat4.js';
 import { Quat } from '../../core/math/quat.js';
 import { Vec3 } from '../../core/math/vec3.js';
+import { copyXrSphericalHarmonicsToEngine, copyXrVectorToEngine } from './xr-coordinate.js';
 import { XRTYPE_AR } from './constants.js';
 
 /**
@@ -11,6 +12,9 @@ import { XRTYPE_AR } from './constants.js';
 
 const vec3A = new Vec3();
 const vec3B = new Vec3();
+const vec3C = new Vec3();
+const vec3D = new Vec3();
+const vec3E = new Vec3();
 const mat4A = new Mat4();
 const mat4B = new Mat4();
 
@@ -83,6 +87,12 @@ class XrLightEstimation extends EventHandler {
      */
     _sphericalHarmonics = new Float32Array(27);
 
+    /** @private */
+    _sphericalHarmonicsWorld = new Float32Array(27);
+
+    /** @private */
+    _sphericalHarmonicsWorldAvailable = false;
+
     /**
      * Create a new XrLightEstimation instance.
      *
@@ -112,6 +122,7 @@ class XrLightEstimation extends EventHandler {
 
         this._lightProbeRequested = false;
         this._lightProbe = null;
+        this._sphericalHarmonicsWorldAvailable = false;
     }
 
     /**
@@ -177,6 +188,7 @@ class XrLightEstimation extends EventHandler {
         this._lightProbeRequested = false;
         this._lightProbe = null;
         this._available = false;
+        this._sphericalHarmonicsWorldAvailable = false;
     }
 
     /**
@@ -204,14 +216,58 @@ class XrLightEstimation extends EventHandler {
 
         // rotation
         vec3A.set(0, 0, 0);
-        vec3B.copy(lightEstimate.primaryLightDirection);
-        mat4A.setLookAt(vec3B, vec3A, Vec3.UP);
-        mat4B.setFromAxisAngle(Vec3.RIGHT, 90); // directional light is looking down
-        mat4A.mul(mat4B);
-        this._rotation.setFromMat4(mat4A);
+        if (this._manager.app.coordinateSystem === 'unreal') {
+            copyXrVectorToEngine(this._manager, lightEstimate.primaryLightDirection, vec3B);
+            vec3B.mulScalar(-1).normalize();
+            vec3C.set(0, 0, 1);
+            vec3D.cross(vec3C, vec3B);
+            if (vec3D.lengthSq() < 1e-10) {
+                vec3D.set(0, 1, 0);
+            } else {
+                vec3D.normalize();
+            }
+            vec3E.cross(vec3B, vec3D).normalize();
+            const data = mat4A.data;
+            data[0] = vec3B.x;
+            data[1] = vec3B.y;
+            data[2] = vec3B.z;
+            data[3] = 0;
+            data[4] = vec3D.x;
+            data[5] = vec3D.y;
+            data[6] = vec3D.z;
+            data[7] = 0;
+            data[8] = vec3E.x;
+            data[9] = vec3E.y;
+            data[10] = vec3E.z;
+            data[11] = 0;
+            data[12] = 0;
+            data[13] = 0;
+            data[14] = 0;
+            data[15] = 1;
+            this._rotation.setFromMat4(mat4A);
+        } else {
+            vec3B.copy(lightEstimate.primaryLightDirection);
+            mat4A.setLookAt(vec3B, vec3A, Vec3.UP);
+            mat4B.setFromAxisAngle(Vec3.RIGHT, 90); // directional light is looking down
+            mat4A.mul(mat4B);
+            this._rotation.setFromMat4(mat4A);
+        }
 
         // spherical harmonics
-        this._sphericalHarmonics.set(lightEstimate.sphericalHarmonicsCoefficients);
+        const coefficients = lightEstimate.sphericalHarmonicsCoefficients;
+        this._sphericalHarmonics.set(coefficients);
+        this._sphericalHarmonicsWorldAvailable = false;
+
+        const probeSpace = this._lightProbe.probeSpace;
+        const referenceSpace = this._manager._referenceSpace;
+        if (probeSpace && referenceSpace && typeof frame.getPose === 'function') {
+            const probePose = frame.getPose(probeSpace, referenceSpace);
+            if (probePose?.transform?.orientation) {
+                copyXrSphericalHarmonicsToEngine(this._manager, coefficients,
+                    probePose.transform.orientation, this._sphericalHarmonicsWorld);
+                this._sphericalHarmonicsWorldAvailable = true;
+            }
+        }
     }
 
     /**
@@ -268,12 +324,25 @@ class XrLightEstimation extends EventHandler {
     }
 
     /**
-     * Spherical harmonic coefficients of estimated ambient light. Or null if data is not available.
+     * Spherical harmonic coefficients of estimated ambient light in WebXR order and probe-space
+     * axes. Use {@link sphericalHarmonicsWorld} to get coefficients rotated into the application's
+     * world axes. Or null if data is not available.
      *
      * @type {Float32Array|null}
      */
     get sphericalHarmonics() {
         return this._available ? this._sphericalHarmonics : null;
+    }
+
+    /**
+     * Spherical harmonic coefficients of estimated ambient light in WebXR order and the active
+     * application's world axes. The probe-space orientation is sampled from the current XR frame.
+     * Returns null when the estimate or probe pose is unavailable.
+     *
+     * @type {Float32Array|null}
+     */
+    get sphericalHarmonicsWorld() {
+        return this._available && this._sphericalHarmonicsWorldAvailable ? this._sphericalHarmonicsWorld : null;
     }
 }
 

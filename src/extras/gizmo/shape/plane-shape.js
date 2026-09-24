@@ -3,6 +3,7 @@ import { CULLFACE_NONE } from '../../../platform/graphics/constants.js';
 import { PlaneGeometry } from '../../../scene/geometry/plane-geometry.js';
 import { Mesh } from '../../../scene/mesh.js';
 import { TriData } from '../tri-data.js';
+import { setLegacyLocalEulerAngles } from '../coordinate-utils.js';
 import { Shape } from './shape.js';
 
 /** @import { ShapeArgs } from './shape.js' */
@@ -149,7 +150,7 @@ class PlaneShape extends Shape {
         );
         this._position[this.axis] = 0;
         this.entity.setLocalPosition(this._position);
-        this.entity.setLocalEulerAngles(this._rotation);
+        setLegacyLocalEulerAngles(this.entity, this._rotation);
         this.entity.setLocalScale(this._size, this._size, this._size);
     }
 }

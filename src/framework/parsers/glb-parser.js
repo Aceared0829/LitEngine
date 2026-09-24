@@ -52,6 +52,7 @@ import { getTextureSource } from './glb/extensions/texture-source.js';
 import { glbMaterialExtensions } from './glb/extensions/index.js';
 import { extractTextureTransform } from './glb/extensions/khr-texture-transform.js';
 import { GltfAccessor, getPrimitiveType, isTriangleMode, gltfToEngineSemanticMap } from './glb/gltf-accessor.js';
+import { convertGltfToUnreal } from './glb-coordinate-conversion.js';
 
 /**
  * @import { GraphicsDevice } from '../../platform/graphics/graphics-device.js'
@@ -955,7 +956,7 @@ const createNode = (gltfNode, nodeIndex, nodeInstancingMap) => {
 };
 
 // creates a camera component on the supplied node, and returns it
-const createCamera = (gltfCamera, node, app) => {
+const createCamera = (gltfCamera, node, app, coordinateSystem) => {
     const isOrthographic = gltfCamera.type === 'orthographic';
     const gltfProperties = isOrthographic ? gltfCamera.orthographic : gltfCamera.perspective;
 
@@ -988,6 +989,7 @@ const createCamera = (gltfCamera, node, app) => {
     }
 
     const cameraEntity = new Entity(gltfCamera.name, app);
+    cameraEntity.coordinateSystem = coordinateSystem;
     cameraEntity.addComponent('camera', componentData);
     return cameraEntity;
 };
@@ -1190,6 +1192,7 @@ const createScenes = (gltf, nodes) => {
 const createCameras = (gltf, nodes, options, app) => {
 
     let cameras = null;
+    const coordinateSystem = options?.coordinateSystem ?? 'unreal';
 
     if (gltf.hasOwnProperty('nodes') && gltf.hasOwnProperty('cameras') && gltf.cameras.length > 0) {
 
@@ -1206,13 +1209,17 @@ const createCameras = (gltf, nodes, options, app) => {
                     }
                     const camera = process ?
                         process(gltfCamera, nodes[nodeIndex]) :
-                        createCamera(gltfCamera, nodes[nodeIndex], app);
+                        createCamera(gltfCamera, nodes[nodeIndex], app, coordinateSystem);
                     if (postprocess) {
                         postprocess(gltfCamera, camera);
                     }
 
                     // add the camera to node->camera map
                     if (camera) {
+                        camera.coordinateSystem = coordinateSystem;
+                        if (camera.camera) {
+                            camera.camera.coordinateSystem = coordinateSystem;
+                        }
                         if (!cameras) cameras = new Map();
                         cameras.set(gltfNode, camera);
                     }
@@ -1238,6 +1245,14 @@ const linkSkins = (gltf, renders, skins) => {
 
 // create engine resources from the downloaded GLB data
 const createResources = async (device, gltf, bufferViews, textures, options, app, resourceExtensions) => {
+    const coordinateSystem = options?.coordinateSystem ?? app?.coordinateSystem ?? 'unreal';
+    if (!['legacy', 'unreal'].includes(coordinateSystem)) {
+        throw new Error(`Unsupported glTF coordinate system ${coordinateSystem}`);
+    }
+    // Resolve the import basis once so nodes, cameras, lights, geometry and animation all use the
+    // same application convention when the asset does not override it.
+    options = { ...options, coordinateSystem };
+
     const preprocess = options?.global?.preprocess;
     const postprocess = options?.global?.postprocess;
 
@@ -1245,6 +1260,17 @@ const createResources = async (device, gltf, bufferViews, textures, options, app
         preprocess(gltf);
     }
 
+    // Coordinate conversion must happen before any nodes, meshes or animation tracks are built.
+    // Copy the views because accessors share the downloaded GLB buffer with other consumers.
+    let bufferViewData = await Promise.all(bufferViews);
+    if (options?.coordinateSystem === 'unreal') {
+        bufferViewData = bufferViewData.map((view) => {
+            const copy = new Uint8Array(view);
+            if (view.byteStride) copy.byteStride = view.byteStride;
+            return copy;
+        });
+        convertGltfToUnreal(gltf, bufferViewData);
+    }
 
     // The very first version of FACT generated incorrectly flipped V texture
     // coordinates. Since this first version was only ever available behind an
@@ -1257,13 +1283,18 @@ const createResources = async (device, gltf, bufferViews, textures, options, app
 
     const nodeInstancingMap = new Map();
     const nodes = createNodes(gltf, options, nodeInstancingMap);
+    nodes.forEach((node) => {
+        node.coordinateSystem = coordinateSystem;
+    });
     const scenes = createScenes(gltf, nodes);
+    scenes.forEach((scene) => {
+        scene.coordinateSystem = coordinateSystem;
+    });
     const lights = createLights(gltf, nodes, options, app);
     const cameras = createCameras(gltf, nodes, options, app);
     const variants = createVariants(gltf);
 
-    // buffer data must have finished loading in order to create meshes and animations
-    const bufferViewData = await Promise.all(bufferViews);
+    // Buffer data is ready for meshes and animations.
     const { meshes, meshVariants, meshDefaultMaterials, flatShadedMeshes, promises } = createMeshes(device, gltf, bufferViewData, options, resourceExtensions);
     const animations = createAnimations(gltf, nodes, bufferViewData, options);
     createInstancing(device, gltf, nodeInstancingMap, bufferViewData);

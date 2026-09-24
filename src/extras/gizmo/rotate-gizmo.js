@@ -9,6 +9,7 @@ import { ArcShape } from './shape/arc-shape.js';
 import { TransformGizmo } from './transform-gizmo.js';
 import { MeshLine } from './mesh-line.js';
 import { SphereShape } from './shape/sphere-shape.js';
+import { rotateLegacyLocal, setLegacyEulerAngles, setLegacyLocalEulerAngles } from './coordinate-utils.js';
 
 /**
  * @import { CameraComponent } from '../../framework/components/camera/component.js'
@@ -523,11 +524,11 @@ class RotateGizmo extends TransformGizmo {
             const dir = this._camera.entity.getPosition().sub(this.root.getPosition()).normalize();
             const elev = Math.atan2(-dir.y, Math.sqrt(dir.x * dir.x + dir.z * dir.z)) * math.RAD_TO_DEG;
             const azim = Math.atan2(-dir.x, -dir.z) * math.RAD_TO_DEG;
-            this._shapes.f.entity.setEulerAngles(-elev + 90, azim, 0);
+            setLegacyEulerAngles(this._shapes.f.entity, -elev + 90, azim, 0);
         } else {
             q1.copy(this._camera.entity.getRotation()).getEulerAngles(v1);
-            this._shapes.f.entity.setEulerAngles(v1);
-            this._shapes.f.entity.rotateLocal(-90, 0, 0);
+            setLegacyEulerAngles(this._shapes.f.entity, v1);
+            rotateLegacyLocal(this._shapes.f.entity, -90, 0, 0);
         }
 
         // axes shapes
@@ -535,20 +536,20 @@ class RotateGizmo extends TransformGizmo {
         const facingDir = v1.copy(this.facingDir);
         q1.copy(this.root.getRotation()).invert().transformVector(facingDir, facingDir);
         angle = Math.atan2(facingDir.z, facingDir.y) * math.RAD_TO_DEG;
-        this._shapes.x.entity.setLocalEulerAngles(0, angle - 90, -90);
+        setLegacyLocalEulerAngles(this._shapes.x.entity, 0, angle - 90, -90);
         angle = Math.atan2(facingDir.x, facingDir.z) * math.RAD_TO_DEG;
-        this._shapes.y.entity.setLocalEulerAngles(0, angle, 0);
+        setLegacyLocalEulerAngles(this._shapes.y.entity, 0, angle, 0);
         angle = Math.atan2(facingDir.y, facingDir.x) * math.RAD_TO_DEG;
-        this._shapes.z.entity.setLocalEulerAngles(90, 0, angle + 90);
+        setLegacyLocalEulerAngles(this._shapes.z.entity, 90, 0, angle + 90);
 
         if (!this._dragging) {
-            dot = facingDir.dot(this.root.right);
+            dot = facingDir.x;
             sector = 1 - Math.abs(dot) > RING_FACING_EPSILON;
             this._shapes.x.show(sector ? 'sector' : 'ring');
-            dot = facingDir.dot(this.root.up);
+            dot = facingDir.y;
             sector = 1 - Math.abs(dot) > RING_FACING_EPSILON;
             this._shapes.y.show(sector ? 'sector' : 'ring');
-            dot = facingDir.dot(this.root.forward);
+            dot = facingDir.z;
             sector = 1 - Math.abs(dot) > RING_FACING_EPSILON;
             this._shapes.z.show(sector ? 'sector' : 'ring');
         }

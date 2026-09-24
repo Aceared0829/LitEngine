@@ -9,6 +9,8 @@ import {
     RESOLUTION_AUTO,
     ScriptComponentSystem,
     StandardMaterial,
+    Vec3,
+    unrealEulerToRotation,
     createGraphicsDevice
 } from 'playcanvas';
 
@@ -43,6 +45,11 @@ export class EditorRuntime {
 
     #history = new TransformHistory();
 
+    /** @type {{ entityId: string, gestureId: number, before: Transform } | null} */
+    #transformDrag = null;
+
+    #lastGestureId = 0;
+
     /** @type {TransformController | null} */
     #transformController = null;
 
@@ -58,16 +65,21 @@ export class EditorRuntime {
     /** @type {boolean} */
     #gizmoActive = false;
 
+    /** @type {object} */
+    #graphicsDeviceOptions;
+
     /** @type {Map<string, Transform>} */
     #initialTransforms = new Map();
 
     /**
      * @param {HTMLCanvasElement} canvas - Canvas supplied by the shell.
      * @param {(event: RuntimeEvent) => void} emit - Outbound runtime event emitter.
+     * @param {object} [graphicsDeviceOptions] - Optional graphics backend selection for renderer tests.
      */
-    constructor(canvas, emit) {
+    constructor(canvas, emit, graphicsDeviceOptions = {}) {
         this.#canvas = canvas;
         this.#emit = emit;
+        this.#graphicsDeviceOptions = graphicsDeviceOptions;
     }
 
     /**
@@ -77,7 +89,7 @@ export class EditorRuntime {
      */
     async initialize() {
         try {
-            const device = await createGraphicsDevice(this.#canvas);
+            const device = await createGraphicsDevice(this.#canvas, this.#graphicsDeviceOptions);
             if (this.#destroyed) {
                 device.destroy();
                 return;
@@ -94,6 +106,7 @@ export class EditorRuntime {
             ];
 
             const app = new AppBase(this.#canvas);
+            app.coordinateSystem = 'unreal';
             app.init(options);
             app.setCanvasResolution(RESOLUTION_AUTO);
             app.scene.ambientLight = new Color(0.2, 0.2, 0.2);
@@ -107,6 +120,7 @@ export class EditorRuntime {
                 (active) => {
                     this.#gizmoActive = active;
                     if (active) {
+                        this.#cancelTransformDrag();
                         this.#selectionController?.invalidatePendingSelection();
                     }
                     this.#viewportTools?.setCameraControlEnabled(!active);
@@ -166,13 +180,30 @@ export class EditorRuntime {
     dispatch(command) {
         switch (command.type) {
             case 'selectEntity':
+                this.#cancelTransformDrag();
                 this.#selectionController?.invalidatePendingSelection();
                 this.#selectById(command.entityId);
                 break;
             case 'setTransform':
+                this.#cancelTransformDrag();
                 this.#setTransform(command.entityId, command.transform, command.label ?? 'Edit Transform');
                 break;
+            case 'beginTransformDrag':
+                this.#beginTransformDrag(command.entityId, command.gestureId);
+                break;
+            case 'previewTransformDrag':
+                this.#previewTransformDrag(command.entityId, command.gestureId, command.field, command.index, command.value);
+                break;
+            case 'endTransformDrag':
+                this.#endTransformDrag(command.entityId, command.gestureId, command.label);
+                break;
+            case 'cancelTransformDrag':
+                if (this.#isCurrentTransformDrag(command.entityId, command.gestureId)) {
+                    this.#cancelTransformDrag();
+                }
+                break;
             case 'resetTransformField':
+                this.#cancelTransformDrag();
                 this.#resetTransformField(command.entityId, command.field);
                 break;
             case 'setTransformTool':
@@ -194,9 +225,11 @@ export class EditorRuntime {
                 this.#emitSnap();
                 break;
             case 'undo':
+                this.#cancelTransformDrag();
                 this.#undo();
                 break;
             case 'redo':
+                this.#cancelTransformDrag();
                 this.#redo();
                 break;
             case 'focusSelected':
@@ -220,10 +253,12 @@ export class EditorRuntime {
      */
     #createCamera(app) {
         const camera = new Entity('Editor Camera');
+        camera.coordinateSystem = 'unreal';
         camera.addComponent('script');
         camera.addComponent('camera', {
             clearColor: new Color(0.07, 0.08, 0.1),
-            farClip: 1000
+            farClip: 1000,
+            coordinateSystem: 'unreal'
         });
         camera.setPosition(5, 5, 5);
         app.root.addChild(camera);
@@ -242,6 +277,7 @@ export class EditorRuntime {
         };
         const createPrimitive = (id, name, type, position, color, scale = [1, 1, 1]) => {
             const entity = new Entity(name);
+            entity.coordinateSystem = 'unreal';
             entity.addComponent('render', { type, material: createMaterial(color) });
             entity.setLocalPosition(...position);
             entity.setLocalScale(...scale);
@@ -250,19 +286,22 @@ export class EditorRuntime {
             this.#setInitialTransform(id);
         };
 
-        createPrimitive('box', 'Box', 'box', [1, 0, 1], new Color(0.35, 0.82, 1));
-        createPrimitive('sphere', 'Sphere', 'sphere', [-1, 0, 1], new Color(1, 0.48, 0.82));
-        createPrimitive('cone', 'Cone', 'cone', [-1, 0, -1], new Color(1, 0.82, 0.35), [1.5, 2.25, 1.5]);
-        createPrimitive('capsule', 'Capsule', 'capsule', [1, 0, -1], new Color(0.53, 0.58, 1));
+        createPrimitive('box', 'Box', 'box', [1, 1, 0.5], new Color(0.35, 0.82, 1));
+        createPrimitive('sphere', 'Sphere', 'sphere', [1, -1, 0.5], new Color(1, 0.48, 0.82));
+        createPrimitive('cone', 'Cone', 'cone', [-1, -1, 1.125], new Color(1, 0.82, 0.35), [1.5, 1.5, 2.25]);
+        createPrimitive('capsule', 'Capsule', 'capsule', [-1, 1, 1], new Color(0.53, 0.58, 1));
 
         const grid = new Entity('Grid');
+        grid.coordinateSystem = 'unreal';
+        grid.setLocalEulerAngles(90, 0, 0);
         grid.setLocalScale(8, 1, 8);
         app.root.addChild(grid);
         ViewportTools.addGrid(grid);
 
         const light = new Entity('Directional Light');
+        light.coordinateSystem = 'unreal';
         light.addComponent('light', { intensity: 1 });
-        light.setEulerAngles(0, 0, -60);
+        light.setRotation(unrealEulerToRotation(new Vec3(0, -60, 0)));
         app.root.addChild(light);
         this.#scene.register(light, 'light');
         this.#setInitialTransform('light');
@@ -283,7 +322,15 @@ export class EditorRuntime {
      * @param {Entity | null} entity - Runtime picked entity.
      */
     #selectRuntimeEntity(entity) {
-        const selectedEntry = this.#scene.snapshot().entities.find(snapshot => this.#scene.getEntity(snapshot.id) === entity);
+        const selectedEntry = this.#scene.snapshot().entities.find((snapshot) => {
+            const candidate = this.#scene.getEntity(snapshot.id);
+            for (let node = entity; node; node = node.parent) {
+                if (node === candidate) {
+                    return true;
+                }
+            }
+            return false;
+        });
         this.#selectById(selectedEntry?.id ?? null);
     }
 
@@ -291,10 +338,94 @@ export class EditorRuntime {
      * @param {string | null} entityId - ID to select.
      */
     #selectById(entityId) {
+        this.#cancelTransformDrag();
         this.#viewportTools?.select(this.#scene.getEntity(entityId));
         this.#selectedEntityId = entityId;
         this.#emit({ type: 'selectionChanged', entityId });
         this.#emit({ type: 'statusChanged', message: entityId ? `Selected ${this.#scene.getEntity(entityId)?.name ?? 'Entity'}` : 'Selection cleared' });
+    }
+
+    /**
+     * @param {string} entityId - Selected entity identity.
+     * @param {number} gestureId - Pointer gesture identity.
+     */
+    #beginTransformDrag(entityId, gestureId) {
+        if (this.#selectedEntityId !== entityId || !Number.isSafeInteger(gestureId) || gestureId <= this.#lastGestureId) {
+            return;
+        }
+        this.#cancelTransformDrag();
+        this.#lastGestureId = gestureId;
+        const before = this.#scene.getTransform(entityId);
+        if (before) {
+            this.#transformDrag = { entityId, gestureId, before };
+        }
+    }
+
+    /**
+     * @param {string} entityId - Selected entity identity.
+     * @param {number} gestureId - Pointer gesture identity.
+     * @returns {boolean} Whether the pointer owns the current transaction.
+     */
+    #isCurrentTransformDrag(entityId, gestureId) {
+        return this.#transformDrag?.entityId === entityId && this.#transformDrag.gestureId === gestureId &&
+            this.#selectedEntityId === entityId;
+    }
+
+    /**
+     * @param {string} entityId - Selected entity identity.
+     * @param {number} gestureId - Pointer gesture identity.
+     * @param {'position'|'rotation'|'scale'} field - Transform vector to edit.
+     * @param {number} index - XYZ component index.
+     * @param {number} value - Preview value.
+     */
+    #previewTransformDrag(entityId, gestureId, field, index, value) {
+        if (!this.#isCurrentTransformDrag(entityId, gestureId) ||
+            !['position', 'rotation', 'scale'].includes(field) || !Number.isInteger(index) || index < 0 || index > 2 ||
+            !Number.isFinite(value)) {
+            return;
+        }
+        const current = this.#scene.getTransform(entityId);
+        if (!current) {
+            return;
+        }
+        const vector = current[field].slice();
+        vector[index] = value;
+        const transform = { ...current, [field]: vector };
+        if (!this.#isValidTransform(transform)) {
+            return;
+        }
+        const after = this.#scene.setTransform(entityId, transform);
+        if (after) {
+            this.#emit({ type: 'transformChanged', entityId, transform: after });
+        }
+    }
+
+    /**
+     * @param {string} entityId - Selected entity identity.
+     * @param {number} gestureId - Pointer gesture identity.
+     * @param {string} label - History label.
+     */
+    #endTransformDrag(entityId, gestureId, label) {
+        if (!this.#isCurrentTransformDrag(entityId, gestureId)) {
+            return;
+        }
+        const before = this.#transformDrag.before;
+        this.#transformDrag = null;
+        const after = this.#scene.getTransform(entityId);
+        if (after) {
+            this.#commitTransform(entityId, before, after, label);
+        }
+    }
+
+    #cancelTransformDrag() {
+        const drag = this.#transformDrag;
+        this.#transformDrag = null;
+        if (drag) {
+            const transform = this.#scene.setTransform(drag.entityId, drag.before);
+            if (transform) {
+                this.#emit({ type: 'transformChanged', entityId: drag.entityId, transform });
+            }
+        }
     }
 
     /**
@@ -419,6 +550,7 @@ export class EditorRuntime {
     }
 
     #resetScene() {
+        this.#cancelTransformDrag();
         this.#selectionController?.invalidatePendingSelection();
         for (const [id, transform] of this.#initialTransforms) {
             this.#scene.setTransform(id, transform);
@@ -431,6 +563,7 @@ export class EditorRuntime {
     }
 
     destroy() {
+        this.#cancelTransformDrag();
         this.#destroyed = true;
         this.#selectionController?.destroy();
         this.#selectionController = null;

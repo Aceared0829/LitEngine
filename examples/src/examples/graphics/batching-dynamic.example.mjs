@@ -34,6 +34,7 @@ createOptions.batchManager = BatchManager;
 createOptions.componentSystems = [RenderComponentSystem, CameraComponentSystem, LightComponentSystem];
 
 const app = new AppBase(canvas);
+app.coordinateSystem = 'legacy';
 app.init(createOptions);
 
 // Set the canvas to fill the window and automatically change resolution to be the same as the canvas size

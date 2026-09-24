@@ -1,5 +1,5 @@
 import { Grid } from 'playcanvas/scripts/esm/grid.mjs';
-import { BoundingBox, Color, Layer, OutlineRenderer, Vec3, Vec4, ViewCube } from 'playcanvas';
+import { BoundingBox, Color, Layer, Mat4, OutlineRenderer, Vec3, Vec4, ViewCube } from 'playcanvas';
 
 import { ViewportCameraControls } from './viewport-camera-controls.mjs';
 
@@ -12,6 +12,7 @@ const MIN_FRAME_DISTANCE = 2;
 const tmpBounds = new BoundingBox();
 const tmpPosition = new Vec3();
 const tmpDirection = new Vec3();
+const tmpViewInverse = new Mat4();
 
 /**
  * Owns viewport-only rendering and camera interaction helpers.
@@ -76,7 +77,10 @@ export class ViewportTools {
             const start = direction.clone().mulScalar(distance).add(target);
             this.#cameraControls.reset(target, start);
         });
-        app.on('prerender', () => this.#viewCube.update(cameraEntity.getWorldTransform()));
+        app.on('prerender', () => {
+            this.#camera.camera.getViewInverseMatrix(cameraEntity.getWorldTransform(), tmpViewInverse);
+            this.#viewCube.update(tmpViewInverse);
+        });
 
         this.#resizeObserver = new ResizeObserver(() => this.resize());
         this.#resizeObserver.observe(canvas);
@@ -148,7 +152,8 @@ export class ViewportTools {
      */
     static addGrid(entity) {
         entity.addComponent('script');
-        entity.script.create(Grid);
+        const grid = entity.script.create(Grid);
+        grid.colorZ = new Color(0.3, 1, 0.3);
     }
 
     /**
@@ -160,12 +165,14 @@ export class ViewportTools {
         let fallback = null;
         for (const entity of entities) {
             fallback ??= entity.getPosition();
-            for (const meshInstance of entity.render?.meshInstances ?? []) {
-                if (!hasBounds) {
-                    tmpBounds.copy(meshInstance.aabb);
-                    hasBounds = true;
-                } else {
-                    tmpBounds.add(meshInstance.aabb);
+            for (const render of entity.findComponents('render')) {
+                for (const meshInstance of render.meshInstances ?? []) {
+                    if (!hasBounds) {
+                        tmpBounds.copy(meshInstance.aabb);
+                        hasBounds = true;
+                    } else {
+                        tmpBounds.add(meshInstance.aabb);
+                    }
                 }
             }
         }

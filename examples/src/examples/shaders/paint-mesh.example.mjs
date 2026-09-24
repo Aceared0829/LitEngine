@@ -71,6 +71,7 @@ createOptions.componentSystems = [RenderComponentSystem, CameraComponentSystem, 
 createOptions.resourceHandlers = [TextureHandler, CubemapHandler];
 
 const app = new AppBase(canvas);
+app.coordinateSystem = 'legacy';
 app.init(createOptions);
 
 const textures = new TextureRenderer(app);

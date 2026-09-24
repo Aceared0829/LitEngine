@@ -119,6 +119,13 @@ let app = null;
  */
 class AppBase extends EventHandler {
     /**
+     * Coordinate convention used by this application.
+     *
+     * @type {'legacy'|'unreal'}
+     */
+    _coordinateSystem = 'unreal';
+
+    /**
      * The application's batch manager.
      *
      * @type {BatchManager|null}
@@ -457,6 +464,34 @@ class AppBase extends EventHandler {
     systems = new ComponentSystemRegistry();
 
     /**
+     * Selects the application's world-coordinate convention. Defaults to the Unreal convention.
+     * Set to `legacy` before `init()` to keep an existing PlayCanvas project in its original
+     * coordinate convention. Unreal mode requires migrated scene data carrying a valid
+     * `coordinateMigration` marker.
+     *
+     * @type {'legacy'|'unreal'}
+     * @example
+     * const app = new AppBase(canvas);
+     * app.coordinateSystem = 'legacy'; // optional compatibility mode for existing projects
+     * app.init(options);
+     */
+    set coordinateSystem(value) {
+        if (value !== 'legacy' && value !== 'unreal') {
+            throw new RangeError(`Unsupported application coordinate system: ${value}`);
+        }
+        if (this.graphicsDevice) {
+            throw new Error('Application coordinate system must be selected before init()');
+        }
+        this._coordinateSystem = value;
+        if (this.root) this.root.coordinateSystem = value;
+        if (this.scene) this.scene.coordinateSystem = value;
+    }
+
+    get coordinateSystem() {
+        return this._coordinateSystem;
+    }
+
+    /**
      * Handles localization.
      *
      * @type {I18n}
@@ -539,6 +574,7 @@ class AppBase extends EventHandler {
         app = this;
 
         this.root = new Entity();
+        this.root.coordinateSystem = this._coordinateSystem;
         this.root._enabledInHierarchy = true;
     }
 
@@ -566,7 +602,8 @@ class AppBase extends EventHandler {
         this._stats = new AppStats(this);
 
         this._soundManager = soundManager;
-        this.scene = new Scene(graphicsDevice);
+        this.scene = new Scene(graphicsDevice, this._coordinateSystem);
+        this.scene.coordinateSystem = this._coordinateSystem;
         this._registerSceneImmediate(this.scene);
 
         if (assetPrefix) this.assets.prefix = assetPrefix;
@@ -1413,7 +1450,9 @@ class AppBase extends EventHandler {
      * @param {number[]} [settings.render.skyMeshPosition] - The position of sky mesh. Ignored for {@link SKYTYPE_INFINITE}. Defaults to [0, 0, 0].
      * @param {number[]} [settings.render.skyMeshRotation] - The rotation of sky mesh. Ignored for {@link SKYTYPE_INFINITE}. Defaults to [0, 0, 0].
      * @param {number[]} [settings.render.skyMeshScale] - The scale of sky mesh. Ignored for {@link SKYTYPE_INFINITE}. Defaults to [1, 1, 1].
-     * @param {number[]} [settings.render.skyCenter] - The center of the sky. Ignored for {@link SKYTYPE_INFINITE}. Defaults to [0, 1, 0].
+     * @param {number[]} [settings.render.skyCenter] - The center of the sky. Ignored for
+     * {@link SKYTYPE_INFINITE}. Defaults to world up: [0, 1, 0] in legacy mode or [0, 0, 1] in
+     * Unreal mode.
      *
      * @param {number} settings.render.lightmapSizeMultiplier - The lightmap resolution multiplier.
      * @param {number} settings.render.lightmapMaxResolution - The maximum lightmap resolution.

@@ -46,6 +46,7 @@ createOptions.componentSystems = [RenderComponentSystem, CameraComponentSystem];
 createOptions.resourceHandlers = [TextureHandler, ContainerHandler];
 
 const app = new AppBase(canvas);
+app.coordinateSystem = 'legacy';
 app.init(createOptions);
 
 const assets = {

@@ -48,6 +48,7 @@ createOptions.touch = new TouchDevice(document.body);
 createOptions.componentSystems = [RenderComponentSystem, CameraComponentSystem, ScriptComponentSystem];
 
 const app = new AppBase(canvas);
+app.coordinateSystem = 'legacy';
 app.init(createOptions);
 app.setCanvasFillMode(FILLMODE_FILL_WINDOW);
 app.setCanvasResolution(RESOLUTION_AUTO);
