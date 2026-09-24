@@ -66,18 +66,20 @@ const _properties = [
 /**
  * The LightComponent enables an {@link Entity} to light the scene. There are three types of light:
  *
- * - `directional`: A global light that emits light in the direction of the negative y-axis of the
- * owner entity. Emulates light sources that appear to be infinitely far away such as the sun. The
+ * - `directional`: A global light that emits along local -Y in legacy mode or local +X in Unreal
+ * coordinate mode. Emulates light sources that appear to be infinitely far away such as the sun. The
  * owner entity's position is effectively ignored.
  * - `omni`: A local light that emits light in all directions from the owner entity's position.
  * Emulates candles, lamps, bulbs, etc.
  * - `spot`: A local light that emits light similarly to an omni light but is bounded by a cone
- * centered on the owner entity's negative y-axis. Emulates flashlights, spotlights, etc.
+ * centered on local -Y in legacy mode or local +X in Unreal coordinate mode. Emulates flashlights,
+ * spotlights, etc.
  *
- * Directional and spot lights are therefore aimed with the owner entity's rotation, and shine along
- * its negative y-axis - so an unrotated light shines straight down. Note that
- * {@link GraphNode#lookAt} orients an entity's negative z-axis, which aims a camera but not a
- * light:
+ * Directional and spot lights are therefore aimed with the owner entity's rotation. In Unreal mode
+ * they shine along local +X; in legacy mode they shine along local -Y. Thus an unrotated Unreal
+ * light shines along +X while an unrotated legacy light shines straight down. The following aiming
+ * examples use legacy mode. {@link GraphNode#lookAt} aims the camera-forward axis, so it does not
+ * by itself aim a light's local -Y axis:
  *
  * ```javascript
  * // an unrotated light shines straight down
@@ -86,8 +88,7 @@ const _properties = [
  * // tilted 45 degrees, it shines down and towards negative z
  * light.setEulerAngles(45, 0, 0);
  *
- * // to aim it at a target, lookAt orients the negative z-axis and the extra rotation brings the
- * // negative y-axis onto it
+ * // in legacy mode, lookAt aims -Z and the extra rotation brings the light's -Y axis onto it
  * light.lookAt(target.getPosition());
  * light.rotateLocal(90, 0, 0);
  *
@@ -96,8 +97,8 @@ const _properties = [
  * const dir = new Vec3(-0.5, -1, -0.3).normalize();
  * light.setRotation(new Quat().setFromDirections(Vec3.DOWN, dir));
  *
- * // the direction a light currently shines in is the negative of its world space up vector
- * const currentDir = light.up.clone().mulScalar(-1);
+ * // the direction a light currently shines in follows its coordinate convention
+ * const currentDir = light.coordinateSystem === 'unreal' ? light.forward.clone() : light.up.clone().mulScalar(-1);
  * ```
  *
  * You should never need to use the LightComponent constructor directly. To add a LightComponent
@@ -276,12 +277,12 @@ class LightComponent extends Component {
     /**
      * Sets the type of the light. Can be:
      *
-     * - `"directional"`: A global light that emits light in the direction of the negative y-axis
+     * - `"directional"`: A global light that emits along local -Y in legacy mode or local +X in Unreal mode
      * of the owner entity.
      * - `"omni"`: A local light that emits light in all directions from the owner entity's
      * position.
      * - `"spot"`: A local light that emits light similarly to an omni light but is bounded by a
-     * cone centered on the owner entity's negative y-axis.
+     * cone centered on local -Y in legacy mode or local +X in Unreal mode.
      *
      * Defaults to `"directional"`. See {@link LightComponent} for how a light is aimed.
      *

@@ -2,6 +2,7 @@ import { Debug } from '../core/debug.js';
 import { EventHandler } from '../core/event-handler.js';
 import { Color } from '../core/math/color.js';
 import { Vec3 } from '../core/math/vec3.js';
+import { unrealEulerToRotation } from '../core/math/coordinate-conversion.js';
 import { Quat } from '../core/math/quat.js';
 import { math } from '../core/math/math.js';
 import { Mat3 } from '../core/math/mat3.js';
@@ -54,6 +55,13 @@ import { getDefaultMaterial } from './materials/default-material.js';
  * @category Graphics
  */
 class Scene extends EventHandler {
+    /**
+     * Coordinate convention for world-space scene settings.
+     *
+     * @type {'legacy'|'unreal'}
+     */
+    coordinateSystem = 'unreal';
+
     /**
      * Fired when the layer composition is set. Use this event to add callbacks or advanced
      * properties to your layers. The handler is passed the old and the new
@@ -290,15 +298,17 @@ class Scene extends EventHandler {
      * Create a new Scene instance.
      *
      * @param {GraphicsDevice} graphicsDevice - The graphics device used to manage this scene.
+     * @param {'legacy'|'unreal'} [coordinateSystem] - World-coordinate convention. Defaults to Unreal.
      * @ignore
      */
-    constructor(graphicsDevice) {
+    constructor(graphicsDevice, coordinateSystem = 'unreal') {
         super();
 
         Debug.assert(graphicsDevice, 'Scene constructor takes a GraphicsDevice as a parameter, and it was not provided.');
         this.device = graphicsDevice;
+        this.coordinateSystem = coordinateSystem;
 
-        this._gravity = new Vec3(0, -9.8, 0);
+        this._gravity = coordinateSystem === 'unreal' ? new Vec3(0, 0, -9.8) : new Vec3(0, -9.8, 0);
 
         /**
          * @type {LayerComposition}
@@ -858,7 +868,9 @@ class Scene extends EventHandler {
         this._skyboxMip = render.skyboxMip ?? 0;
 
         if (render.skyboxRotation) {
-            this.skyboxRotation = (new Quat()).setFromEulerAngles(render.skyboxRotation[0], render.skyboxRotation[1], render.skyboxRotation[2]);
+            this.skyboxRotation = this.coordinateSystem === 'unreal' ?
+                unrealEulerToRotation(new Vec3(render.skyboxRotation), new Quat()) :
+                (new Quat()).setFromEulerAngles(render.skyboxRotation[0], render.skyboxRotation[1], render.skyboxRotation[2]);
         }
 
         this.sky.applySettings(render);

@@ -2,6 +2,7 @@ import { Http } from '../../platform/net/http.js';
 import { AnimCurve } from '../anim/evaluator/anim-curve.js';
 import { AnimData } from '../anim/evaluator/anim-data.js';
 import { AnimTrack } from '../anim/evaluator/anim-track.js';
+import { migrateLegacyAnimClipTracks, previewMigratedAnimClipTracks } from './anim-clip-coordinate-migration.js';
 
 /**
  * Parser for animation clip resources. Fetches the JSON data and builds an {@link AnimTrack}.
@@ -27,6 +28,15 @@ class AnimClipParser {
     }
 
     open(url, data) {
+        const coordinateSystem = this.handler?.app?.coordinateSystem ?? 'unreal';
+        if (coordinateSystem === 'unreal') {
+            if (!Object.hasOwn(data, 'coordinateMigration')) {
+                throw new Error('Unreal coordinate mode requires animclip data migrated with migrateLegacyAnimClipTracks()');
+            }
+            data = migrateLegacyAnimClipTracks(data);
+        } else if (Object.hasOwn(data, 'coordinateMigration')) {
+            data = previewMigratedAnimClipTracks(data);
+        }
         const name = data.name;
         const duration = data.duration;
         const inputs = data.inputs.map((input) => {

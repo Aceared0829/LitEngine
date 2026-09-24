@@ -24,7 +24,7 @@ class FakeCanvas extends EventTarget {
     }
 }
 
-const setup = (t) => {
+const setup = (t, unreal = false) => {
     const previous = new Map(['window', 'document', 'HTMLElement', 'WheelEvent'].map(name => [name, Object.getOwnPropertyDescriptor(globalThis, name)]));
     globalThis.window = new EventTarget();
     globalThis.document = { activeElement: null, pointerLockElement: null };
@@ -40,6 +40,7 @@ const setup = (t) => {
     const app = new EventHandler();
     const camera = new Entity('camera');
     camera.camera = { fov: 45 };
+    camera.coordinateSystem = unreal ? 'unreal' : 'legacy';
     camera.setPosition(0, 5, 5);
     const navigation = [];
     const speeds = [];
@@ -124,6 +125,61 @@ test('E/Q move only on world Y at every camera pitch, and require RMB', (t) => {
         h.emit('keyup', { code: 'KeyQ' }, window);
         h.tick();
     }
+});
+
+test('Unreal camera flies along world Z and walks in the XY plane', (t) => {
+    const h = setup(t, true);
+    const start = new Vec3(-5, 0, 5);
+    h.controls.reset(Vec3.ZERO, start);
+    assert.ok(h.camera.forward.clone().normalize().equalsApprox(new Vec3(1, 0, -1).normalize()));
+    h.emit('pointerdown', { button: 2, buttons: 2 });
+    h.emit('keydown', { code: 'KeyE' }, window);
+    h.tick();
+    const rise = h.camera.getPosition().clone().sub(start);
+    assert.ok(rise.equalsApprox(new Vec3(0, 0, 1)));
+    h.emit('keyup', { code: 'KeyE' }, window);
+    h.emit('pointerup', { button: 2, buttons: 0 });
+    h.controls.reset(Vec3.ZERO, start);
+    h.emit('pointerdown', { button: 0, buttons: 1 });
+    h.emit('pointermove', { buttons: 1, screenY: -20 });
+    h.tick();
+    assert.ok(Math.abs(h.camera.getPosition().z - start.z) < 1e-8);
+    assert.ok(h.camera.getPosition().x > start.x);
+});
+
+test('Unreal camera aligns to the vertical view cube axes without retaining a stale rotation', (t) => {
+    const h = setup(t, true);
+    const focus = new Vec3(1, 2, 3);
+    for (const [offset, expectedForward] of [
+        [new Vec3(0, 0, 5), new Vec3(0, 0, -1)],
+        [new Vec3(0, 0, -5), new Vec3(0, 0, 1)]
+    ]) {
+        h.controls.reset(focus, focus.clone().add(offset));
+        assert.ok(h.camera.forward.equalsApprox(expectedForward));
+        assert.ok(h.camera.up.equalsApprox(new Vec3(1, 0, 0)));
+    }
+});
+
+test('Unreal camera looks, pans and orbits using the reflected eye basis', (t) => {
+    const h = setup(t, true);
+    h.controls.reset(Vec3.ZERO, new Vec3(-5, 0, 2));
+    h.emit('pointerdown', { button: 2, buttons: 2 });
+    const position = h.camera.getPosition().clone();
+    h.emit('pointermove', { buttons: 2, screenX: 20 });
+    h.tick();
+    assert.ok(h.camera.getPosition().equalsApprox(position));
+    assert.ok(h.camera.forward.y > 0);
+    h.emit('pointerup');
+    h.emit('pointerdown', { button: 1, buttons: 4 });
+    h.emit('pointermove', { buttons: 4, screenX: 40 });
+    h.tick();
+    assert.ok(h.camera.getPosition().distance(position) > 0);
+    h.emit('pointerup');
+    h.controls.reset(Vec3.ZERO, new Vec3(-5, 0, 2));
+    h.emit('pointerdown', { button: 0, buttons: 1, altKey: true });
+    h.emit('pointermove', { buttons: 1, altKey: true, screenX: 30 });
+    h.tick();
+    assert.ok(Math.abs(h.camera.getPosition().length() - Math.sqrt(29)) < 1e-5);
 });
 
 test('LMB walks horizontally, RMB looks, Alt+LMB orbits the pivot', (t) => {

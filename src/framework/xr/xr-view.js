@@ -2,6 +2,7 @@ import { RenderView } from '../../scene/render-view.js';
 import { Texture } from '../../platform/graphics/texture.js';
 import { Mat4 } from '../../core/math/mat4.js';
 import { ADDRESS_CLAMP_TO_EDGE, FILTER_LINEAR, FILTER_NEAREST, PIXELFORMAT_RGB8, PIXELFORMAT_R32F } from '../../platform/graphics/constants.js';
+import { copyXrViewMatrices } from './xr-coordinate.js';
 
 /**
  * @import { XrManager } from './xr-manager.js'
@@ -243,12 +244,13 @@ class XrView extends RenderView {
         const viewport = this._manager.xrBridge.getViewport(frame, this._xrView);
         this.setViewport(viewport.x, viewport.y, viewport.width, viewport.height);
 
-        // matrices: WebXR provides both the view-to-world (transform.matrix) and world-to-view
-        // (transform.inverse.matrix) matrices, so both are passed to avoid recomputing the inverse
+        // WebXR provides both matrices. The helper changes only the world-space basis in Unreal mode,
+        // leaving graphics eye space intact for the WebXR projection matrix.
+        copyXrViewMatrices(this._manager, this._xrView, this._viewInvMat, this._viewMat);
         this.setView(
             this._xrView.projectionMatrix,
-            this._xrView.transform.matrix,
-            this._xrView.transform.inverse.matrix
+            this._viewInvMat.data,
+            this._viewMat.data
         );
 
         this._updateTextureColor();

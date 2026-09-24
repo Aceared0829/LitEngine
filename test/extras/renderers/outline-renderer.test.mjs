@@ -88,4 +88,28 @@ describe('OutlineRenderer', function () {
         expect(meshInstance.getParameter('pcOutlineColor')).to.equal(undefined);
         expect(meshInstance.material.onUpdateShader).to.equal(null);
     });
+
+    it('matches the source camera axes when rendering a Z-up outline', function () {
+        const sceneCameraEntity = new Entity('scene camera');
+        sceneCameraEntity.coordinateSystem = 'unreal';
+        sceneCameraEntity.addComponent('camera', { coordinateSystem: 'unreal' });
+        app.root.addChild(sceneCameraEntity);
+        sceneCameraEntity.setPosition(4, 5, 6);
+        sceneCameraEntity.lookAt(0, 0, 0);
+
+        const immediateLayer = app.scene.layers.getLayerByName('Immediate');
+        renderer.frameUpdate(sceneCameraEntity, immediateLayer, false);
+        expect(renderer.outlineCameraEntity.coordinateSystem).to.equal('unreal');
+        expect(renderer.outlineCameraEntity.camera.coordinateSystem).to.equal('unreal');
+        expect(renderer.outlineCameraEntity.forward.distance(sceneCameraEntity.forward)).to.be.lessThan(1e-5);
+        const outlineView = renderer.outlineCameraEntity.camera.camera.viewMatrix.data;
+        const sceneView = sceneCameraEntity.camera.camera.viewMatrix.data;
+        expect(outlineView.every((value, index) => Math.abs(value - sceneView[index]) < 1e-5)).to.be.true;
+
+        sceneCameraEntity.camera.coordinateSystem = 'legacy';
+        sceneCameraEntity.coordinateSystem = 'legacy';
+        renderer.frameUpdate(sceneCameraEntity, immediateLayer, false);
+        expect(renderer.outlineCameraEntity.camera.coordinateSystem).to.equal('legacy');
+        sceneCameraEntity.destroy();
+    });
 });

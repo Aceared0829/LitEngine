@@ -185,6 +185,10 @@ class RigidBodyComponentSystem extends ComponentSystem {
         super(app);
 
         this.id = 'rigidbody';
+
+        if (app.coordinateSystem === 'unreal') {
+            this.gravity.set(0, 0, -9.81);
+        }
         this._stats = app.stats.frame;
 
         this.ComponentType = RigidBodyComponent;

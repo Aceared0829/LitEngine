@@ -1,8 +1,10 @@
 import { Quat } from '../../../core/math/quat.js';
+import { Vec2 } from '../../../core/math/vec2.js';
 import { Vec3 } from '../../../core/math/vec3.js';
 import { InputController } from '../input.js';
 import { damp } from '../math.js';
 import { Pose } from '../pose.js';
+import { math } from '../../../core/math/math.js';
 
 /** @import { InputFrame } from '../input.js'; */
 
@@ -11,6 +13,7 @@ const offset = new Vec3();
 const angles = new Vec3();
 
 const rotation = new Quat();
+const unrealBack = new Vec3(-1, 0, 0);
 
 /**
  * The orbit controller. The pose orbits a focus point at a distance: `rotate` deltas turn the
@@ -45,6 +48,9 @@ class OrbitController extends InputController {
      * @private
      */
     _childPose = new Pose();
+
+    /** @private */
+    _zoomRange = new Vec2(-Infinity, Infinity);
 
     /**
      * The rotation damping. In the range 0 to 1, where a value of 0 means no damping and 1 means
@@ -82,12 +88,21 @@ class OrbitController extends InputController {
     }
 
     set zoomRange(range) {
-        this._targetChildPose.zRange.copy(range);
+        this._zoomRange.copy(range);
+        this._syncZoomRange();
         this._childPose.copy(this._targetChildPose.move(Vec3.ZERO));
     }
 
     get zoomRange() {
-        return this._targetRootPose.zRange;
+        return this._zoomRange;
+    }
+
+    _syncZoomRange() {
+        if (this._targetChildPose.coordinateSystem === 'unreal') {
+            this._targetChildPose.xRange.set(-this._zoomRange.y, -this._zoomRange.x);
+        } else {
+            this._targetChildPose.zRange.copy(this._zoomRange);
+        }
     }
 
     /**
@@ -95,8 +110,12 @@ class OrbitController extends InputController {
      * @param {boolean} [smooth] - Whether to smooth the transition.
      */
     attach(pose, smooth = true) {
+        for (const internalPose of [this._targetRootPose, this._rootPose, this._targetChildPose, this._childPose, this._pose]) {
+            internalPose.coordinateSystem = pose.coordinateSystem;
+        }
+        this._syncZoomRange();
         this._targetRootPose.set(pose.getFocus(dir), pose.angles, 0);
-        this._targetChildPose.position.set(0, 0, pose.distance);
+        this._targetChildPose.position.copy(pose.coordinateSystem === 'unreal' ? unrealBack : Vec3.BACK).mulScalar(pose.distance);
 
         if (!smooth) {
             this._rootPose.copy(this._targetRootPose);
@@ -118,14 +137,17 @@ class OrbitController extends InputController {
         const { move, rotate } = frame.read();
 
         // move
-        offset.set(move[0], move[1], 0);
-        rotation.setFromEulerAngles(this._rootPose.angles).transformVector(offset, offset);
+        const unrealCoordinates = this._rootPose.coordinateSystem === 'unreal';
+        offset.set(unrealCoordinates ? 0 : move[0], unrealCoordinates ? 0 : move[1], 0);
+        if (unrealCoordinates) offset.set(0, move[0], move[1]);
+        this._rootPose.getRotation(rotation).transformVector(offset, offset);
         this._targetRootPose.move(offset);
-        const { z: dist } = this._targetChildPose.position;
-        this._targetChildPose.move(offset.set(0, 0, dist * (1 + move[2]) - dist));
+        const dist = unrealCoordinates ? -this._targetChildPose.position.x : this._targetChildPose.position.z;
+        const zoomedDistance = math.clamp(dist * (1 + move[2]), this._zoomRange.x, this._zoomRange.y);
+        this._targetChildPose.position.copy(unrealCoordinates ? unrealBack : Vec3.BACK).mulScalar(zoomedDistance);
 
         // rotate
-        this._targetRootPose.rotate(angles.set(-rotate[1], -rotate[0], 0));
+        this._targetRootPose.rotate(unrealCoordinates ? angles.set(0, -rotate[1], -rotate[0]) : angles.set(-rotate[1], -rotate[0], 0));
 
         // smoothing
         this._rootPose.lerp(
@@ -144,10 +166,11 @@ class OrbitController extends InputController {
         );
 
         // calculate final pose
-        rotation.setFromEulerAngles(this._rootPose.angles)
+        this._rootPose.getRotation(rotation)
         .transformVector(this._childPose.position, offset)
         .add(this._rootPose.position);
-        return this._pose.set(offset, this._rootPose.angles, this._childPose.position.z);
+        return this._pose.set(offset, this._rootPose.angles,
+            unrealCoordinates ? -this._childPose.position.x : this._childPose.position.z);
     }
 
     destroy() {

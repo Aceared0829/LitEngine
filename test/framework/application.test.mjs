@@ -1,6 +1,8 @@
 import { expect } from 'chai';
 
+import { Vec3 } from '../../src/core/math/vec3.js';
 import { app as currentApp } from '../../src/framework/app-base.js';
+import { Application } from '../../src/framework/application.js';
 import { AssetRegistry } from '../../src/framework/asset/asset-registry.js';
 import { Asset } from '../../src/framework/asset/asset.js';
 import { ComponentSystemRegistry } from '../../src/framework/components/registry.js';
@@ -14,6 +16,7 @@ import { SceneRegistry } from '../../src/framework/scene-registry.js';
 import { ScriptRegistry } from '../../src/framework/script/script-registry.js';
 import { XrManager } from '../../src/framework/xr/xr-manager.js';
 import { GraphicsDevice } from '../../src/platform/graphics/graphics-device.js';
+import { NullGraphicsDevice } from '../../src/platform/graphics/null/null-graphics-device.js';
 import { BatchManager } from '../../src/scene/batching/batch-manager.js';
 import { Scene } from '../../src/scene/scene.js';
 import { createApp } from '../app.mjs';
@@ -35,6 +38,59 @@ describe('Application', function () {
     });
 
     describe('#constructor', function () {
+
+        it('defaults to Unreal coordinates and keeps legacy as an explicit compatibility mode', function () {
+            const unrealCanvas = document.createElement('canvas');
+            const unrealApp = new Application(unrealCanvas, {
+                graphicsDevice: new NullGraphicsDevice(unrealCanvas)
+            });
+            const legacyCanvas = document.createElement('canvas');
+            const legacyApp = new Application(legacyCanvas, {
+                graphicsDevice: new NullGraphicsDevice(legacyCanvas),
+                coordinateSystem: 'legacy'
+            });
+
+            try {
+                expect(unrealApp.coordinateSystem).to.equal('unreal');
+                expect(unrealApp.root.coordinateSystem).to.equal('unreal');
+                expect(unrealApp.scene.coordinateSystem).to.equal('unreal');
+                expect(unrealApp.scene.sky.center.equals(new Vec3(0, 0, 1))).to.be.true;
+                expect(unrealApp.systems.rigidbody.gravity.equals(new Vec3(0, 0, -9.81))).to.be.true;
+                expect(new Entity('UnrealEntity', unrealApp).coordinateSystem).to.equal('unreal');
+
+                expect(legacyApp.coordinateSystem).to.equal('legacy');
+                expect(legacyApp.root.coordinateSystem).to.equal('legacy');
+                expect(legacyApp.scene.coordinateSystem).to.equal('legacy');
+                expect(legacyApp.scene.sky.center.equals(new Vec3(0, 1, 0))).to.be.true;
+                expect(legacyApp.systems.rigidbody.gravity.equals(new Vec3(0, -9.81, 0))).to.be.true;
+                expect(new Entity('LegacyEntity', legacyApp).coordinateSystem).to.equal('legacy');
+            } finally {
+                unrealApp.destroy();
+                legacyApp.destroy();
+            }
+        });
+
+        it('initializes in Unreal coordinate mode when requested', function () {
+            const canvas = document.createElement('canvas');
+            const unrealApp = new Application(canvas, {
+                graphicsDevice: new NullGraphicsDevice(canvas),
+                coordinateSystem: 'unreal'
+            });
+
+            try {
+                expect(unrealApp.coordinateSystem).to.equal('unreal');
+                expect(unrealApp.root.coordinateSystem).to.equal('unreal');
+                expect(unrealApp.scene.coordinateSystem).to.equal('unreal');
+                expect(unrealApp.systems.rigidbody.gravity.equals(new Vec3(0, 0, -9.81))).to.be.true;
+
+                const entity = new Entity('UnrealEntity', unrealApp);
+                expect(entity.coordinateSystem).to.equal('unreal');
+                entity.addComponent('camera');
+                expect(entity.camera.camera.coordinateSystem).to.equal('unreal');
+            } finally {
+                unrealApp.destroy();
+            }
+        });
 
         it('support no options', function () {
             expect(app.assets).to.be.instanceOf(AssetRegistry);

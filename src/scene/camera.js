@@ -1,3 +1,4 @@
+import { cameraToGraphicsEye, graphicsEyeToCamera } from '../core/math/camera-basis.js';
 import { Color } from '../core/math/color.js';
 import { Debug } from '../core/debug.js';
 import { Mat4 } from '../core/math/mat4.js';
@@ -36,6 +37,9 @@ const _frustumViewInvMat = new Mat4();
 const _frustumViewMat = new Mat4();
 const _frustumViewProjMat = new Mat4();
 const _frustumPoints = [new Vec3(), new Vec3(), new Vec3(), new Vec3(), new Vec3(), new Vec3(), new Vec3(), new Vec3()];
+const _unrealCameraToEye = cameraToGraphicsEye;
+const _eyeToUnrealCamera = graphicsEyeToCamera;
+const _cameraViewScratch = new Mat4();
 
 let id = 0;
 
@@ -203,6 +207,7 @@ class Camera {
         this._node = null;
         this._orthoHeight = 10;
         this._projection = PROJECTION_PERSPECTIVE;
+        this._coordinateSystem = 'unreal';
         this._projectionOffset = new Vec2();
         this._rect = new Vec4(0, 0, 1, 1);
         this._renderTarget = null;
@@ -552,6 +557,54 @@ class Camera {
         return this._projection;
     }
 
+    /**
+     * Chooses the camera's local axes. `legacy` looks along -Z with +X right/+Y up. `unreal`
+     * looks along +X with +Y right/+Z up. The graphics view is mirrored for `unreal`; this
+     * setting does not convert scene entities or external assets. Defaults to `unreal`; set to
+     * `legacy` when viewing an existing PlayCanvas hierarchy.
+     *
+     * @type {'legacy'|'unreal'}
+     */
+    set coordinateSystem(value) {
+        if (value !== 'legacy' && value !== 'unreal') {
+            throw new RangeError(`Unsupported camera coordinate system: ${value}`);
+        }
+        if (this._coordinateSystem !== value) {
+            this._coordinateSystem = value;
+            this._viewMatDirty = true;
+            this._viewProjMatDirty = true;
+        }
+    }
+
+    get coordinateSystem() {
+        return this._coordinateSystem;
+    }
+
+    /**
+     * Applies the camera's local-basis reflection to a camera-to-world transform.
+     *
+     * @param {Mat4} nodeTransform - Camera entity transform.
+     * @param {Mat4} result - Destination graphics eye-to-world transform.
+     * @returns {Mat4} Converted transform.
+     * @ignore
+     */
+    getViewInverseMatrix(nodeTransform, result) {
+        return this._coordinateSystem === 'unreal' ? result.mul2(nodeTransform, _eyeToUnrealCamera) : result.copy(nodeTransform);
+    }
+
+    /**
+     * Applies the camera's local-basis reflection to a world-to-camera transform.
+     *
+     * @param {Mat4} nodeTransform - Camera entity transform.
+     * @param {Mat4} result - Destination world-to-graphics-eye transform.
+     * @returns {Mat4} Converted transform.
+     * @ignore
+     */
+    getViewMatrix(nodeTransform, result) {
+        result.copy(nodeTransform).invert();
+        return this._coordinateSystem === 'unreal' ? result.mul2(_unrealCameraToEye, result) : result;
+    }
+
     get projectionMatrix() {
         this._evaluateProjectionMatrix();
         return this._projMat;
@@ -595,7 +648,7 @@ class Camera {
     get viewMatrix() {
         if (this._viewMatDirty) {
             const wtm = this._node.getWorldTransform();
-            this._viewMat.copy(wtm).invert();
+            this.getViewMatrix(wtm, this._viewMat);
             this._viewMatDirty = false;
         }
         return this._viewMat;
@@ -759,6 +812,7 @@ class Camera {
         this.frustumCulling = other.frustumCulling;
         this.layers = other.layers;
         this.orthoHeight = other.orthoHeight;
+        this.coordinateSystem = other.coordinateSystem;
         this.projection = other.projection;
         this.projectionOffset = other.projectionOffset;
         this.rect = other.rect;
@@ -884,7 +938,7 @@ class Camera {
             const rot = this._node.getRotation();
             _frustumViewInvMat.setTRS(pos, rot, Vec3.ONE);
         }
-        _frustumViewMat.copy(_frustumViewInvMat).invert();
+        this.getViewMatrix(_frustumViewInvMat, _frustumViewMat);
 
         _frustumViewProjMat.mul2(projMat, _frustumViewMat);
         this.frustum.setFromMat4(_frustumViewProjMat);
@@ -959,7 +1013,7 @@ class Camera {
             // transform to world space
             const invView = this._node.getWorldTransform();
             _halfSize.z = -this.nearClip;
-            invView.transformPoint(_halfSize, _point);
+            this.getViewInverseMatrix(invView, _cameraViewScratch).transformPoint(_halfSize, _point);
 
             // point along camera->_point ray at distance z from the camera
             const cameraPos = this._node.getPosition();
@@ -1122,6 +1176,13 @@ class Camera {
         points[7].x = cx - x;
         points[7].y = cy - y;
         points[7].z = -far;
+
+        if (this._coordinateSystem === 'unreal') {
+            for (const point of points) {
+                const { x, y, z } = point;
+                point.set(-z, x, y);
+            }
+        }
 
         return points;
     }

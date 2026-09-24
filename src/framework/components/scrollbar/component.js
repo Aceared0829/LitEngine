@@ -1,5 +1,5 @@
 import { math } from '../../../core/math/math.js';
-import { ORIENTATION_HORIZONTAL } from '../../../scene/constants.js';
+import { ORIENTATION_HORIZONTAL, ORIENTATION_VERTICAL } from '../../../scene/constants.js';
 
 import { GraphNode } from '../../../scene/graph-node.js';
 
@@ -137,7 +137,9 @@ class ScrollbarComponent extends Component {
     }
 
     /**
-     * Sets the current position value of the scrollbar, in the range 0 to 1. Defaults to 0.
+     * Sets the current position value of the scrollbar, in the range 0 to 1. For a vertical
+     * scrollbar, values increase from bottom to top in legacy mode and top to bottom in Unreal
+     * Screen UI. Defaults to 0.
      *
      * @type {number}
      */
@@ -323,7 +325,8 @@ class ScrollbarComponent extends Component {
     }
 
     _getSign() {
-        return this._orientation === ORIENTATION_HORIZONTAL ? 1 : -1;
+        if (this._orientation === ORIENTATION_HORIZONTAL) return 1;
+        return this._orientation === ORIENTATION_VERTICAL && this.entity.element?._isUnrealScreenUi() ? 1 : -1;
     }
 
     _getAxis() {

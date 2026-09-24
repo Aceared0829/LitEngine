@@ -277,6 +277,42 @@ describe('ScrollViewComponent', function () {
             expect(captured[0].y).to.be.closeTo(0.25, 1e-5);
         });
 
+        it('moves vertical content upward for Unreal screen-space and world-space views', function () {
+            const unrealApp = createApp({ coordinateSystem: 'unreal' });
+            try {
+                for (const screenSpace of [true, false]) {
+                    const screen = new Entity('screen', unrealApp);
+                    screen.addComponent('screen', { screenSpace });
+                    unrealApp.root.addChild(screen);
+
+                    const viewport = new Entity('viewport', unrealApp);
+                    viewport.addComponent('element', { type: ELEMENTTYPE_GROUP, height: 100 });
+                    const content = new Entity('content', unrealApp);
+                    content.addComponent('element', { type: ELEMENTTYPE_IMAGE, height: 200 });
+                    const view = new Entity('scrollview', unrealApp);
+                    view.addComponent('element', { type: ELEMENTTYPE_GROUP, height: 100 });
+                    view.addChild(viewport);
+                    view.addChild(content);
+                    screen.addChild(view);
+                    view.addComponent('scrollview', {
+                        horizontal: true,
+                        vertical: true,
+                        scrollMode: SCROLL_MODE_INFINITE,
+                        viewportEntity: viewport,
+                        contentEntity: content
+                    });
+
+                    view.scrollview.scroll = new Vec2(0, 1);
+
+                    expect(content.getLocalPosition().y).to.equal(-100);
+                    expect(view.scrollview._contentPositionToScrollValue(content.getLocalPosition()).y).to.equal(1);
+                    screen.destroy();
+                }
+            } finally {
+                unrealApp.destroy();
+            }
+        });
+
     });
 
     describe('#viewportEntity', function () {

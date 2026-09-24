@@ -23,6 +23,28 @@ const spriteIndices = [
     2, 3, 1
 ];
 
+const convertSpriteGeometryToUnreal = (geometry) => {
+    const positions = geometry.positions;
+    const normals = geometry.normals;
+    const indices = geometry.indices;
+
+    for (let i = 0; i < positions.length; i += 3) {
+        const y = positions[i + 1];
+        positions[i + 1] = positions[i + 2];
+        positions[i + 2] = y;
+    }
+    for (let i = 0; i < normals.length; i += 3) {
+        const y = normals[i + 1];
+        normals[i + 1] = normals[i + 2];
+        normals[i + 2] = y;
+    }
+    for (let i = 0; i < indices.length; i += 3) {
+        const second = indices[i + 1];
+        indices[i + 1] = indices[i + 2];
+        indices[i + 2] = second;
+    }
+};
+
 /**
  * A Sprite contains references to one or more frames of a {@link TextureAtlas}. It can be used by
  * the {@link SpriteComponent} or the {@link ElementComponent} to render a single frame or a sprite
@@ -58,6 +80,7 @@ class Sprite extends EventHandler {
         this._atlas = options && options.atlas !== undefined ? options.atlas : null;
         this._frameKeys = options && options.frameKeys !== undefined ? options.frameKeys : null;
         this._meshes = [];
+        this._unrealMeshes = null;
 
         // set to true to update multiple
         // properties without re-creating meshes
@@ -215,7 +238,39 @@ class Sprite extends EventHandler {
         return this._meshes;
     }
 
+    /**
+     * Gets sprite meshes using the requested local plane convention.
+     *
+     * @param {'legacy'|'unreal'} coordinateSystem - The axis convention of the owning world entity.
+     * @returns {Mesh[]} The frame meshes in that convention.
+     * @private
+     */
+    _getMeshes(coordinateSystem) {
+        if (coordinateSystem !== 'unreal') return this._meshes;
+        if (this._unrealMeshes) return this._unrealMeshes;
+
+        const count = this._frameKeys?.length ?? 0;
+        this._unrealMeshes = new Array(count);
+        for (let i = 0; i < count; i++) {
+            const frame = this._atlas?.frames[this._frameKeys[i]];
+            if (!frame) continue;
+
+            this._unrealMeshes[i] = this.renderMode === SPRITE_RENDERMODE_SLICED || this._renderMode === SPRITE_RENDERMODE_TILED ?
+                this._create9SliceMesh() : this._createSimpleMesh(frame, true);
+        }
+        return this._unrealMeshes;
+    }
+
+    /** @private */
+    _destroyUnrealMeshes() {
+        if (!this._unrealMeshes) return;
+        for (const mesh of this._unrealMeshes) mesh?.destroy();
+        this._unrealMeshes = null;
+    }
+
     _createMeshes() {
+        this._destroyUnrealMeshes();
+
         // destroy old meshes
         const len = this._meshes.length;
         for (let i = 0; i < len; i++) {
@@ -241,7 +296,7 @@ class Sprite extends EventHandler {
         this.fire('set:meshes');
     }
 
-    _createSimpleMesh(frame) {
+    _createSimpleMesh(frame, unrealCoordinates = false) {
         const rect = frame.rect;
         const texWidth = this._atlas.texture.width;
         const texHeight = this._atlas.texture.height;
@@ -275,9 +330,13 @@ class Sprite extends EventHandler {
 
         const geom = new Geometry();
         geom.positions = positions;
-        geom.normals = spriteNormals;
+        geom.normals = unrealCoordinates ? spriteNormals.slice() : spriteNormals;
         geom.uvs = uvs;
-        geom.indices = spriteIndices;
+        geom.indices = unrealCoordinates ? spriteIndices.slice() : spriteIndices;
+
+        if (unrealCoordinates) {
+            convertSpriteGeometryToUnreal(geom);
+        }
 
         return Mesh.fromGeometry(this._device, geom);
     }
@@ -349,6 +408,7 @@ class Sprite extends EventHandler {
         const idx = this._frameKeys.indexOf(frameKey);
         if (idx < 0) return;
 
+        this._destroyUnrealMeshes();
         if (frame) {
             // only re-create frame for simple render mode, since
             // 9-sliced meshes don't need frame info to create their mesh
@@ -366,6 +426,7 @@ class Sprite extends EventHandler {
         const idx = this._frameKeys.indexOf(frameKey);
         if (idx < 0) return;
 
+        this._destroyUnrealMeshes();
         this._meshes[idx] = null;
         this.fire('set:meshes');
     }
@@ -388,6 +449,7 @@ class Sprite extends EventHandler {
      * Free up the meshes created by the sprite.
      */
     destroy() {
+        this._destroyUnrealMeshes();
         for (const mesh of this._meshes) {
             if (mesh) {
                 mesh.destroy();

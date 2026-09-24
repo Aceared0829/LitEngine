@@ -6,10 +6,11 @@ import { getNavigationMode, isEditableTarget } from './navigation-input.mjs';
 const MIN_DISTANCE = 0.05;
 const LOOK_SENSITIVITY = 0.2;
 const DRAG_SPEED = 0.01;
+const UE_POLE_UP = new Vec3(1, 0, 0);
 
 /**
  * Editor-only UE perspective controls. The engine's general-purpose CameraControls keep their
- * original orbit behavior. All camera motion here uses PlayCanvas's Y-up world coordinates.
+ * original orbit behavior. The world vertical follows the camera entity's coordinate system.
  */
 export class ViewportCameraControls {
     #camera;
@@ -169,10 +170,12 @@ export class ViewportCameraControls {
         this.#focus.copy(focus);
         this.#position.copy(position);
         this.#offset.sub2(focus, position).normalize();
-        this.#pitch = Math.asin(Math.max(-1, Math.min(1, this.#offset.y))) * 180 / Math.PI;
-        this.#yaw = Math.atan2(-this.#offset.x, -this.#offset.z) * 180 / Math.PI;
+        const unreal = this.#camera.coordinateSystem === 'unreal';
+        this.#pitch = Math.asin(Math.max(-1, Math.min(1, unreal ? this.#offset.z : this.#offset.y))) * 180 / Math.PI;
+        this.#yaw = (unreal ? Math.atan2(this.#offset.y, this.#offset.x) :
+            Math.atan2(-this.#offset.x, -this.#offset.z)) * 180 / Math.PI;
         this.#camera.setPosition(this.#position);
-        this.#camera.setEulerAngles(this.#pitch, this.#yaw, 0);
+        this.#applyRotation();
     }
 
     #syncNavigation() {
@@ -184,9 +187,28 @@ export class ViewportCameraControls {
     }
 
     #rotate(dx, dy) {
-        this.#yaw -= dx * LOOK_SENSITIVITY;
+        this.#yaw += dx * LOOK_SENSITIVITY * (this.#camera.coordinateSystem === 'unreal' ? 1 : -1);
         this.#pitch = Math.max(-89.5, Math.min(89.5, this.#pitch - dy * LOOK_SENSITIVITY));
-        this.#camera.setEulerAngles(this.#pitch, this.#yaw, 0);
+        this.#applyRotation();
+    }
+
+    #applyRotation() {
+        if (this.#camera.coordinateSystem === 'unreal') {
+            const pitch = this.#pitch * Math.PI / 180;
+            const yaw = this.#yaw * Math.PI / 180;
+            const horizontal = Math.cos(pitch);
+            this.#forward.set(horizontal * Math.cos(yaw), horizontal * Math.sin(yaw), Math.sin(pitch));
+            const isVerticalView = Math.abs(this.#forward.z) > 0.999999;
+            const target = this.#offset.copy(this.#forward).add(this.#camera.getPosition());
+            if (isVerticalView) {
+                // World Z is parallel to the view direction at the top and bottom view cube faces.
+                this.#camera.lookAt(target, UE_POLE_UP);
+            } else {
+                this.#camera.lookAt(target);
+            }
+        } else {
+            this.#camera.setEulerAngles(this.#pitch, this.#yaw, 0);
+        }
     }
 
     #move(offset) {
@@ -225,7 +247,12 @@ export class ViewportCameraControls {
                 }
                 case 'walk': {
                     this.#rotate(dx, 0);
-                    this.#forward.set(-Math.sin(this.#yaw * Math.PI / 180), 0, -Math.cos(this.#yaw * Math.PI / 180));
+                    const yaw = this.#yaw * Math.PI / 180;
+                    if (this.#camera.coordinateSystem === 'unreal') {
+                        this.#forward.set(Math.cos(yaw), Math.sin(yaw), 0);
+                    } else {
+                        this.#forward.set(-Math.sin(yaw), 0, -Math.cos(yaw));
+                    }
                     this.#move(this.#offset.copy(this.#forward).mulScalar(-dy * this.moveSpeed * DRAG_SPEED));
                     this.#focus.copy(this.#camera.forward).mulScalar(distance).add(this.#camera.getPosition());
                     break;
@@ -256,7 +283,8 @@ export class ViewportCameraControls {
             const z = held('W') - held('S') + held('UP') - held('DOWN');
             this.#forward.copy(this.#camera.forward).mulScalar(z);
             this.#right.copy(this.#camera.right).mulScalar(x);
-            this.#offset.add2(this.#forward, this.#right).add(this.#up.set(0, y, 0));
+            this.#offset.add2(this.#forward, this.#right).add(this.#camera.coordinateSystem === 'unreal' ?
+                this.#up.set(0, 0, y) : this.#up.set(0, y, 0));
             if (this.#offset.lengthSq() > 0) {
                 const multiplier = held('SHIFT') ? 2 : held('CTRL') ? 0.5 : 1;
                 this.#move(this.#offset.normalize().mulScalar(this.moveSpeed * multiplier * Math.min(dt, 0.1)));

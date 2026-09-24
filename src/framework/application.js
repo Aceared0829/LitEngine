@@ -148,6 +148,9 @@ class Application extends AppBase {
      * @param {object} [options.graphicsDeviceOptions] - Options object that is passed into the
      * {@link GraphicsDevice} constructor.
      * @param {string[]} [options.scriptsOrder] - Scripts in order of loading first.
+     * @param {'legacy'|'unreal'} [options.coordinateSystem] - Coordinate convention used by the
+     * application. Defaults to the Unreal convention. Use `legacy` to keep an existing PlayCanvas
+     * project in its original coordinate convention.
      * @example
      * // Engine-only example: create the application manually
      * const app = new Application(canvas, options);
@@ -157,6 +160,8 @@ class Application extends AppBase {
      */
     constructor(canvas, options = {}) {
         super(canvas);
+
+        this.coordinateSystem = options.coordinateSystem ?? 'unreal';
 
         const appOptions = new AppOptions();
 

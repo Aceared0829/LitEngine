@@ -188,6 +188,11 @@ class ContainerResource {
  * might be slower to render. Defaults to false.
  * [options.skipMeshes] - When true, the meshes and gaussian splats from the container are not
  * created. This can be useful if you only need access to textures or animations and similar.
+ * [options.coordinateSystem] - Override the application's coordinate convention when importing
+ * node transforms, dense mesh geometry, skin matrices and transform animations. The default is
+ * the application's convention, which is Unreal for new applications. Set to `'legacy'` for a
+ * legacy PlayCanvas application. Unsupported compressed, sparse, quantized or non-indexed spatial geometry fails
+ * during import instead of producing a partly converted resource.
  *
  * For example, to receive a texture preprocess callback:
  *

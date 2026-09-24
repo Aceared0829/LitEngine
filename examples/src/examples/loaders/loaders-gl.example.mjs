@@ -69,6 +69,7 @@ createOptions.componentSystems = [RenderComponentSystem, CameraComponentSystem, 
 createOptions.resourceHandlers = [TextureHandler, ContainerHandler];
 
 const app = new AppBase(canvas);
+app.coordinateSystem = 'legacy';
 app.init(createOptions);
 app.start();
 // Set the canvas to fill the window and automatically change resolution to be the same as the canvas size

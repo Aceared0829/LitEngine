@@ -71,6 +71,7 @@ appOptions.graphicsDevice = device;
 appOptions.componentSystems = [RenderComponentSystem, CameraComponentSystem];
 
 const app = new AppBase(canvas);
+app.coordinateSystem = 'legacy';
 app.init(appOptions);
 
 app.start();

@@ -56,6 +56,7 @@ options.componentSystems = [CameraComponentSystem, LightComponentSystem];
 options.resourceHandlers = [ContainerHandler, TextureHandler];
 
 const app = new AppBase(canvas);
+app.coordinateSystem = 'legacy';
 app.init(options);
 app.setCanvasFillMode(FILLMODE_FILL_WINDOW);
 app.setCanvasResolution(RESOLUTION_AUTO);

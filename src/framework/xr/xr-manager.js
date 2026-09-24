@@ -18,6 +18,7 @@ import { XrMeshDetection } from './xr-mesh-detection.js';
 import { XrViews } from './xr-views.js';
 import { XrBridge } from '../../platform/graphics/xr-bridge.js';
 import { DEVICETYPE_WEBGPU } from '../../platform/graphics/constants.js';
+import { copyXrRotationToEngine, copyXrVectorToEngine } from './xr-coordinate.js';
 
 /**
  * @import { AppBase } from '../app-base.js'
@@ -946,8 +947,8 @@ class XrManager extends EventHandler {
         // reset position
         const posePosition = pose.transform.position;
         const poseOrientation = pose.transform.orientation;
-        this._localPosition.set(posePosition.x, posePosition.y, posePosition.z);
-        this._localRotation.set(poseOrientation.x, poseOrientation.y, poseOrientation.z, poseOrientation.w);
+        copyXrVectorToEngine(this, posePosition, this._localPosition);
+        copyXrRotationToEngine(this, poseOrientation, this._localRotation);
 
         // update the camera fov properties only when we had 0 views
         if (lengthOld === 0 && this.views.list.length > 0) {

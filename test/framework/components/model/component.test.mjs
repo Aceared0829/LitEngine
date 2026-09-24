@@ -10,6 +10,16 @@ describe('ModelComponent', function () {
     let app;
     let assets = {};
 
+    it('uses an XY plane when the entity opts into Unreal coordinates before component creation', function () {
+        const entity = new Entity();
+        entity.coordinateSystem = 'unreal';
+        entity.addComponent('model', { type: 'plane' });
+
+        const normals = [];
+        entity.model.meshInstances[0].mesh.getNormals(normals);
+        expect(normals.slice(0, 3).map(value => value || 0)).to.deep.equal([0, 0, 1]);
+    });
+
     const loadAssetList = function (list, cb) {
         // listen for asset load events and fire cb() when all assets are loaded
         let count = 0;

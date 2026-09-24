@@ -1,3 +1,5 @@
+import { Vec3, unrealEulerToRotation, unrealRotationToEuler } from 'playcanvas';
+
 /** @import { Entity } from 'playcanvas' */
 
 /**
@@ -42,7 +44,7 @@ export class SceneAdapter {
         }
 
         entity.setLocalPosition(...transform.position);
-        entity.setLocalEulerAngles(...transform.rotation);
+        entity.setLocalRotation(unrealEulerToRotation(new Vec3(transform.rotation)));
         entity.setLocalScale(...transform.scale);
         return this.getTransform(id);
     }
@@ -59,7 +61,7 @@ export class SceneAdapter {
 
         return {
             position: entity.getLocalPosition().toArray(),
-            rotation: entity.getLocalEulerAngles().toArray(),
+            rotation: unrealRotationToEuler(entity.getLocalRotation()).toArray(),
             scale: entity.getLocalScale().toArray()
         };
     }
@@ -105,15 +107,17 @@ export class SceneAdapter {
         /** @type {string[]} */
         const components = [];
         for (const type of ['camera', 'light', 'render']) {
-            if (entity[type]) {
+            if (entity[type] || (type === 'render' && entity.findComponents('render').length)) {
                 components.push(type);
             }
         }
 
+        const render = entity.render ?? entity.findComponents('render')[0];
+
         return {
             id,
             name: entity.name,
-            type: entity.render?.type ?? 'Entity',
+            type: render?.type ?? 'Entity',
             components,
             transform: /** @type {Transform} */ (this.getTransform(id)),
             initialTransform: /** @type {Transform} */ (this.getInitialTransform(id) ?? this.getTransform(id))

@@ -483,8 +483,9 @@ class ButtonComponent extends Component {
     }
 
     /**
-     * Sets the padding to be used in hit-test calculations. Can be used to expand the bounding box
-     * so that the button is easier to tap. Defaults to `[0, 0, 0, 0]`.
+     * Sets the padding used in hit-test calculations. It can expand the button's bounding box to
+     * make it easier to tap. The order is `[left, bottom, right, top]` in legacy screen-space UI and
+     * `[left, top, right, bottom]` in Unreal screen-space UI. Defaults to `[0, 0, 0, 0]`.
      *
      * @type {Vec4}
      */

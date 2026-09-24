@@ -22,6 +22,6 @@ vec3 calcSpawnPosition(vec3 inBounds, float rndFactor) {
 }
 
 void addInitialVelocity(inout vec3 localVelocity, vec3 inBounds) {
-    localVelocity -= vec3(0, 0, initialVelocity);
+    localVelocity += initialVelocityDirection * initialVelocity;
 }
 `;

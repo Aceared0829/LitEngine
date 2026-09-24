@@ -45,7 +45,7 @@ export function Viewport({ canvasRef, state, dispatch }) {
             jsx('strong', null, 'UE-style perspective navigation'),
             jsx('p', null, 'Click LMB to select · drag LMB to move forward/back and turn · drag RMB to look'),
             jsx('p', null, 'LMB + RMB / MMB drag to pan · wheel to dolly · RMB + wheel to adjust fly speed'),
-            jsx('p', null, 'Hold RMB + WASD / arrows to fly · E/Q move along world up/down (Y-up in PlayCanvas)'),
+            jsx('p', null, 'Hold RMB + WASD / arrows to fly · E/Q move along world Z up/down'),
             jsx('p', null, 'Alt + LMB orbit · Alt + RMB dolly · Alt + MMB pan · F frame selection'),
             jsx('p', null, 'Q/W/E/R tools outside navigation · ~ / X toggle space · Shift+F frame all · Shift/Ctrl fast/slow fly')
         ),

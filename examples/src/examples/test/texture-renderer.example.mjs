@@ -49,6 +49,7 @@ const options = new AppOptions();
 options.graphicsDevice = device;
 options.componentSystems = [CameraComponentSystem];
 const app = new AppBase(canvas);
+app.coordinateSystem = 'legacy';
 app.init(options);
 const renderer = new TextureRenderer(app);
 const resources = new Set();

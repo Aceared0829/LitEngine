@@ -262,6 +262,7 @@ const createOptions = new AppOptions();
 createOptions.graphicsDevice = device;
 
 const app = new AppBase(canvas);
+app.coordinateSystem = 'legacy';
 app.init(createOptions);
 app.start();
 

@@ -2,9 +2,11 @@ import { math } from '../../core/math/math.js';
 import { Quat } from '../../core/math/quat.js';
 import { Vec2 } from '../../core/math/vec2.js';
 import { Vec3 } from '../../core/math/vec3.js';
+import { unrealEulerToRotation } from '../../core/math/coordinate-conversion.js';
 
 const tmpV1 = new Vec3();
 const rotation = new Quat();
+const unrealForward = new Vec3(1, 0, 0);
 
 /**
  * Represents a pose in 3D space, including position and rotation. It is what an
@@ -61,14 +63,39 @@ class Pose {
      */
     zRange = new Vec2(-Infinity, Infinity);
 
+    /** @private */
+    _coordinateSystem = 'unreal';
+
+    /**
+     * Selects the coordinate convention used for the pose's Euler angles and forward direction.
+     * `unreal` uses Roll (X), Pitch (Y), Yaw (Z) and local +X forward; `legacy` keeps PlayCanvas
+     * XYZ Euler angles and local -Z forward. Controllers adopt the supplied pose's convention when
+     * attached.
+     *
+     * @type {'legacy'|'unreal'}
+     */
+    set coordinateSystem(value) {
+        if (value !== 'legacy' && value !== 'unreal') {
+            throw new RangeError(`Unsupported pose coordinate system: ${value}`);
+        }
+        this._coordinateSystem = value;
+    }
+
+    get coordinateSystem() {
+        return this._coordinateSystem;
+    }
+
     /**
      * Creates a new Pose instance.
      *
      * @param {Vec3} [position] - The position of the pose.
      * @param {Vec3} [angles] - The angles of the pose in degrees.
      * @param {number} [distance] - The focus distance from the position to the pose.
+     * @param {'legacy'|'unreal'} [coordinateSystem] - The coordinate convention for the pose's
+     * Euler angles and forward direction. Defaults to `unreal`.
      */
-    constructor(position = Vec3.ZERO, angles = Vec3.ZERO, distance = 0) {
+    constructor(position = Vec3.ZERO, angles = Vec3.ZERO, distance = 0, coordinateSystem = 'unreal') {
+        this.coordinateSystem = coordinateSystem;
         this.set(position, angles, distance);
     }
 
@@ -79,6 +106,7 @@ class Pose {
      * @returns {Pose} The updated Pose instance.
      */
     copy(other) {
+        this.coordinateSystem = other.coordinateSystem;
         return this.set(other.position, other.angles, other.distance);
     }
 
@@ -88,7 +116,7 @@ class Pose {
      * @returns {Pose} A new Pose instance with the same position, angles, and distance.
      */
     clone() {
-        return new Pose(this.position.clone(), this.angles.clone(), this.distance);
+        return new Pose(this.position.clone(), this.angles.clone(), this.distance, this.coordinateSystem);
     }
 
     /**
@@ -99,7 +127,8 @@ class Pose {
      * @returns {boolean} True if the poses are approximately equal, false otherwise.
      */
     equalsApprox(other, epsilon = 1e-6) {
-        return this.position.equalsApprox(other.position, epsilon) &&
+        return this.coordinateSystem === other.coordinateSystem &&
+            this.position.equalsApprox(other.position, epsilon) &&
             this.angles.equalsApprox(other.angles, epsilon) &&
             Math.abs(this.distance - other.distance) < epsilon;
     }
@@ -113,8 +142,13 @@ class Pose {
      * @param {number} [alpha2] - The alpha value for angles interpolation.
      * @param {number} [alpha3] - The alpha value for distance interpolation.
      * @returns {Pose} The updated Pose instance.
+     * @throws {RangeError} When the poses use different coordinate conventions.
      */
     lerp(lhs, rhs, alpha1, alpha2 = alpha1, alpha3 = alpha1) {
+        if (lhs.coordinateSystem !== rhs.coordinateSystem) {
+            throw new RangeError('Cannot interpolate poses with different coordinate systems');
+        }
+        this.coordinateSystem = lhs.coordinateSystem;
         this.position.lerp(lhs.position, rhs.position, alpha1);
         this.angles.x = math.lerpAngle(lhs.angles.x, rhs.angles.x, alpha2) % 360;
         this.angles.y = math.lerpAngle(lhs.angles.y, rhs.angles.y, alpha2) % 360;
@@ -154,9 +188,14 @@ class Pose {
         this.angles.y %= 360;
         this.angles.z %= 360;
 
-        // clamp pitch and yaw
-        this.angles.x = math.clamp(this.angles.x, this.pitchRange.x, this.pitchRange.y);
-        this.angles.y = math.clamp(this.angles.y, this.yawRange.x, this.yawRange.y);
+        // Clamp pitch and yaw in the component slots used by the active Euler convention.
+        if (this._coordinateSystem === 'unreal') {
+            this.angles.y = math.clamp(this.angles.y, this.pitchRange.x, this.pitchRange.y);
+            this.angles.z = math.clamp(this.angles.z, this.yawRange.x, this.yawRange.y);
+        } else {
+            this.angles.x = math.clamp(this.angles.x, this.pitchRange.x, this.pitchRange.y);
+            this.angles.y = math.clamp(this.angles.y, this.yawRange.x, this.yawRange.y);
+        }
 
         return this;
     }
@@ -187,10 +226,27 @@ class Pose {
         this.position.copy(from);
         this.distance = from.distance(to);
         const dir = tmpV1.sub2(to, from).normalize();
-        const elev = Math.atan2(-dir.y, Math.sqrt(dir.x * dir.x + dir.z * dir.z)) * math.RAD_TO_DEG;
-        const azim = Math.atan2(-dir.x, -dir.z) * math.RAD_TO_DEG;
-        this.angles.set(-elev, azim, 0);
+        if (this._coordinateSystem === 'unreal') {
+            const pitch = Math.atan2(dir.z, Math.sqrt(dir.x * dir.x + dir.y * dir.y)) * math.RAD_TO_DEG;
+            const yaw = Math.atan2(dir.y, dir.x) * math.RAD_TO_DEG;
+            this.angles.set(0, pitch, yaw);
+        } else {
+            const elev = Math.atan2(-dir.y, Math.sqrt(dir.x * dir.x + dir.z * dir.z)) * math.RAD_TO_DEG;
+            const azim = Math.atan2(-dir.x, -dir.z) * math.RAD_TO_DEG;
+            this.angles.set(-elev, azim, 0);
+        }
         return this;
+    }
+
+    /**
+     * Gets the pose's orientation as a quaternion.
+     *
+     * @param {Quat} [out] - The output quaternion.
+     * @returns {Quat} The pose rotation.
+     */
+    getRotation(out = new Quat()) {
+        return this._coordinateSystem === 'unreal' ?
+            unrealEulerToRotation(this.angles, out) : out.setFromEulerAngles(this.angles);
     }
 
     /**
@@ -200,8 +256,8 @@ class Pose {
      * @returns {Vec3} The focus point of the pose.
      */
     getFocus(out) {
-        return rotation.setFromEulerAngles(this.angles)
-        .transformVector(Vec3.FORWARD, out)
+        this.getRotation(rotation);
+        return rotation.transformVector(this._coordinateSystem === 'unreal' ? unrealForward : Vec3.FORWARD, out)
         .mulScalar(this.distance)
         .add(this.position);
     }

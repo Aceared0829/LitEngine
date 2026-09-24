@@ -60,6 +60,7 @@ createOptions.componentSystems = [RenderComponentSystem, CameraComponentSystem, 
 createOptions.resourceHandlers = [];
 
 const app = new AppBase(canvas);
+app.coordinateSystem = 'legacy';
 app.init(createOptions);
 
 app.setCanvasFillMode(FILLMODE_FILL_WINDOW);

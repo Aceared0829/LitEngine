@@ -1,6 +1,7 @@
 import { expect } from 'chai';
 import { restore, spy, stub } from 'sinon';
 
+import { unrealEulerToRotation } from '../../../../src/core/math/coordinate-conversion.js';
 import { Quat } from '../../../../src/core/math/quat.js';
 import { Vec3 } from '../../../../src/core/math/vec3.js';
 import { Asset } from '../../../../src/framework/asset/asset.js';
@@ -49,6 +50,24 @@ describe('CollisionComponent', function () {
             expect(e.collision.shape).to.equal(null);
             expect(e.collision.render).to.equal(null);
             expect(e.collision.model).to.equal(null);
+        });
+
+        it('aligns a default Unreal capsule collision volume with local Z', function () {
+            const entity = new Entity();
+            entity.coordinateSystem = 'unreal';
+            entity.addComponent('collision', { type: 'capsule' });
+
+            expect(entity.collision.axis).to.equal(2);
+            entity.collision.axis = 0;
+            expect(entity.collision.axis).to.equal(0);
+        });
+
+        it('interprets collision Euler offsets as UE Roll, Pitch, Yaw on Unreal entities', function () {
+            const entity = new Entity();
+            entity.coordinateSystem = 'unreal';
+            entity.addComponent('collision', { angularOffset: [10, 20, 30] });
+
+            expect(entity.collision.angularOffset.equalsApprox(unrealEulerToRotation(new Vec3(10, 20, 30)))).to.equal(true);
         });
 
         it('round-trips every property passed via the data argument', function () {

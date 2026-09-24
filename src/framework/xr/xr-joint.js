@@ -2,6 +2,7 @@ import { platform } from '../../core/platform.js';
 import { Mat4 } from '../../core/math/mat4.js';
 import { Quat } from '../../core/math/quat.js';
 import { Vec3 } from '../../core/math/vec3.js';
+import { copyXrRotationToEngine, copyXrVectorToEngine } from './xr-coordinate.js';
 
 /**
  * @import { XrFinger } from './xr-finger.js'
@@ -117,8 +118,9 @@ class XrJoint {
     update(pose) {
         this._dirtyLocal = true;
         this._radius = pose.radius;
-        this._localPosition.copy(pose.transform.position);
-        this._localRotation.copy(pose.transform.orientation);
+        const manager = this._hand._manager;
+        copyXrVectorToEngine(manager, pose.transform.position, this._localPosition);
+        copyXrRotationToEngine(manager, pose.transform.orientation, this._localRotation);
     }
 
     /** @private */

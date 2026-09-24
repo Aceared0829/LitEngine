@@ -352,7 +352,8 @@ class ElementComponent extends Component {
      * @private
      */
     get _absTop() {
-        return this._localAnchor.w - this._margin.w;
+        return this._isUnrealScreenUi() ? this._localAnchor.y + this._margin.y :
+            this._localAnchor.w - this._margin.w;
     }
 
     /**
@@ -360,7 +361,8 @@ class ElementComponent extends Component {
      * @private
      */
     get _absBottom() {
-        return this._localAnchor.y + this._margin.y;
+        return this._isUnrealScreenUi() ? this._localAnchor.w - this._margin.w :
+            this._localAnchor.y + this._margin.y;
     }
 
     /**
@@ -396,13 +398,11 @@ class ElementComponent extends Component {
     }
 
     /**
-     * Sets the anchor for this element component. Specifies where the left, bottom, right and top
-     * edges of the component are anchored relative to its parent. Each value ranges from 0 to 1.
-     * e.g. a value of `[0, 0, 0, 0]` means that the element will be anchored to the bottom left of
-     * its parent. A value of `[1, 1, 1, 1]` means it will be anchored to the top right. A split
-     * anchor is when the left-right or top-bottom pairs of the anchor are not equal. In that case,
-     * the component will be resized to cover that entire area. For example, a value of `[0, 0, 1, 1]`
-     * will make the component resize exactly as its parent.
+     * Sets where the element edges are anchored relative to its parent. Each value ranges from 0 to
+     * 1. Legacy screens use `[left, bottom, right, top]` with a bottom-left origin. Unreal Screen
+     * UI uses `[left, top, right, bottom]` with a top-left origin. A split anchor is
+     * when the horizontal or vertical pair differs. In that case, the component resizes to cover
+     * that area. `[0, 0, 1, 1]` makes the component resize to its parent in either convention.
      *
      * @example
      * this.entity.element.anchor = new Vec4(Math.random() * 0.1, 0, 1, 0);
@@ -488,6 +488,17 @@ class ElementComponent extends Component {
      * @type {number}
      */
     set bottom(value) {
+        if (this._isUnrealScreenUi()) {
+            this._margin.w = value;
+            const p = this.entity.getLocalPosition();
+            const wt = this._absTop;
+            const wb = this._localAnchor.w - value;
+            this._setHeight(wb - wt);
+            p.y = this._localAnchor.w - this._localAnchor.y - value - this._calculatedHeight * (1 - this._pivot.y);
+            this.entity.setLocalPosition(p);
+            return;
+        }
+
         this._margin.y = value;
         const p = this.entity.getLocalPosition();
         const wt = this._absTop;
@@ -504,7 +515,7 @@ class ElementComponent extends Component {
      * @type {number}
      */
     get bottom() {
-        return this._margin.y;
+        return this._isUnrealScreenUi() ? this._margin.w : this._margin.y;
     }
 
     /**
@@ -552,9 +563,9 @@ class ElementComponent extends Component {
     }
 
     /**
-     * Gets the array of 4 {@link Vec2}s that represent the bottom left, bottom right, top right
-     * and top left corners of the component in canvas pixels. Only works for screen space element
-     * components.
+     * Gets the four physical corners of the component in canvas pixels, in bottom-left,
+     * bottom-right, top-right, top-left order. Y coordinates use a bottom-left origin in legacy
+     * mode and a top-left origin for Unreal screen-space UI. Only works for screen-space elements.
      *
      * @type {Vec2[]}
      */
@@ -568,9 +579,10 @@ class ElementComponent extends Component {
         const sx = device.canvas.clientWidth / device.width;
         const sy = device.canvas.clientHeight / device.height;
 
-        // scale screen corners to canvas size and reverse y
+        // Screen UI uses top-left coordinates in the Unreal runtime and bottom-left in legacy mode.
         for (let i = 0; i < 4; i++) {
-            this._canvasCorners[i].set(screenCorners[i].x * sx, (device.height - screenCorners[i].y) * sy);
+            const y = this._isUnrealScreenSpace() ? screenCorners[i].y : device.height - screenCorners[i].y;
+            this._canvasCorners[i].set(screenCorners[i].x * sx, y * sy);
         }
 
         this._canvasCornersDirty = false;
@@ -706,9 +718,9 @@ class ElementComponent extends Component {
     }
 
     /**
-     * Sets the distance from the left, bottom, right and top edges of the anchor. For example, if
-     * we are using a split anchor like `[0, 0, 1, 1]` and the margin is `[0, 0, 0, 0]` then the
-     * component will be the same width and height as its parent.
+     * Sets the edge margins from the anchor. Legacy screens use `[left, bottom, right, top]`;
+     * Unreal Screen UI uses `[left, top, right, bottom]`. If the anchor spans the parent and
+     * all margins are zero, the component has the same size as its parent.
      *
      * @type {Vec4}
      */
@@ -719,8 +731,8 @@ class ElementComponent extends Component {
     }
 
     /**
-     * Gets the distance from the left, bottom, right and top edges of the anchor. Use the setter to
-     * update the margin.
+     * Gets the edge margins from the anchor. The vertical order is bottom then top in legacy mode,
+     * and top then bottom in Unreal Screen UI. Use the setter to update the margin.
      *
      * @type {Readonly<Vec4>}
      */
@@ -739,8 +751,9 @@ class ElementComponent extends Component {
     }
 
     /**
-     * Sets the position of the pivot of the component relative to its anchor. Each value ranges
-     * from 0 to 1 where `[0, 0]` is the bottom left and `[1, 1]` is the top right.
+     * Sets the pivot relative to the anchor. Each value ranges from 0 to 1. In legacy screens,
+     * `[0, 0]` is bottom-left and `[1, 1]` is top-right; in Unreal Screen UI, `[0, 0]` is
+     * top-left and `[1, 1]` is bottom-right.
      *
      * @example
      * this.entity.element.pivot = [Math.random() * 0.1, Math.random() * 0.1];
@@ -823,8 +836,9 @@ class ElementComponent extends Component {
     }
 
     /**
-     * Gets the array of 4 {@link Vec3}s that represent the bottom left, bottom right, top right
-     * and top left corners of the component relative to its parent {@link ScreenComponent}.
+     * Gets the four physical corners relative to the parent {@link ScreenComponent}, in bottom-left,
+     * bottom-right, top-right, top-left order. Their Y coordinates follow the active screen-space
+     * convention.
      *
      * @type {Vec3[]}
      */
@@ -842,11 +856,12 @@ class ElementComponent extends Component {
         return this._screenCorners;
     }
 
-    // Transforms an anchor-space rectangle (defined by its left/bottom/right/top edges) into the 4
-    // screen-space corners (bottom left, bottom right, top right, top left), populating and
-    // returning the supplied array. This is the shared logic behind screenCorners.
+    // Transforms an anchor-space rectangle into physical screen corners in bottom-left, bottom-right,
+    // top-right, top-left order. UI coordinates use +Y up in legacy mode and +Y down in Unreal mode.
+    // This is the shared logic behind screenCorners.
     _calcScreenCorners(left, bottom, right, top, corners) {
-        const parentBottomLeft = this.entity.parent && this.entity.parent.element && this.entity.parent.element.screenCorners[0];
+        const parentElement = this.entity.parent && this.entity.parent.element;
+        const parentOrigin = parentElement?.screenCorners[this._isUnrealScreenUi() ? 3 : 0];
 
         // init corners
         corners[0].set(left, bottom, 0);
@@ -862,8 +877,8 @@ class ElementComponent extends Component {
                 corners[i].mulScalar(this.screen.screen.scale);
             }
 
-            if (parentBottomLeft) {
-                corners[i].add(parentBottomLeft);
+            if (parentOrigin) {
+                corners[i].add(parentOrigin);
             }
         }
 
@@ -897,6 +912,17 @@ class ElementComponent extends Component {
      * @type {number}
      */
     set top(value) {
+        if (this._isUnrealScreenUi()) {
+            this._margin.y = value;
+            const p = this.entity.getLocalPosition();
+            const wb = this._absBottom;
+            const wt = this._localAnchor.y + value;
+            this._setHeight(wb - wt);
+            p.y = value + this._calculatedHeight * this._pivot.y;
+            this.entity.setLocalPosition(p);
+            return;
+        }
+
         this._margin.w = value;
         const p = this.entity.getLocalPosition();
         const wb = this._absBottom;
@@ -913,7 +939,7 @@ class ElementComponent extends Component {
      * @type {number}
      */
     get top() {
-        return this._margin.w;
+        return this._isUnrealScreenUi() ? this._margin.y : this._margin.w;
     }
 
     /**
@@ -1068,8 +1094,10 @@ class ElementComponent extends Component {
             if (!this.screen.screen.screenSpace) {
                 matA.copy(this.screen.screen._screenMatrix);
 
-                // flip screen matrix along the horizontal axis
-                matA.data[13] = -matA.data[13];
+                if (!this._isUnrealWorldSpaceScreenUi()) {
+                    // Legacy world screens store +Y-up coordinates around a centered origin.
+                    matA.data[13] = -matA.data[13];
+                }
 
                 // create transform that brings screen corners to world space
                 matA.mul2(this.screen.getWorldTransform(), matA);
@@ -1448,9 +1476,9 @@ class ElementComponent extends Component {
     }
 
     /**
-     * Sets the horizontal and vertical alignment of the text. Values range from 0 to 1 where
-     * `[0, 0]` is the bottom left and `[1, 1]` is the top right. Only works for
-     * {@link ELEMENTTYPE_TEXT} elements.
+     * Sets the horizontal and vertical alignment of the text. Values range from 0 to 1. Legacy
+     * screens use `[0, 0]` for bottom-left and `[1, 1]` for top-right; Unreal Screen UI uses
+     * `[0, 0]` for top-left and `[1, 1]` for bottom-right. Only works for text elements.
      *
      * @type {Vec2}
      */
@@ -2148,7 +2176,7 @@ class ElementComponent extends Component {
                 let resx = 0;
                 let resy = 0;
                 let px = 0;
-                let py = 1;
+                let py = element._isUnrealScreenUi() ? 0 : 1;
 
                 if (this._parent && this._parent.element) {
                     // use parent rect
@@ -2241,7 +2269,8 @@ class ElementComponent extends Component {
 
                     const pivotOffset = vecB;
                     pivotOffset.set(element._absLeft + element._pivot.x * element.calculatedWidth,
-                        element._absBottom + element._pivot.y * element.calculatedHeight, 0);
+                        (element._isUnrealScreenUi() ? element._absTop : element._absBottom) +
+                        element._pivot.y * element.calculatedHeight, 0);
 
                     matA.setTranslate(-pivotOffset.x, -pivotOffset.y, -pivotOffset.z);
                     matB.setTRS(depthOffset, this.getLocalRotation(), this.getLocalScale());
@@ -2701,7 +2730,8 @@ class ElementComponent extends Component {
         this._calculateLocalAnchors();
 
         const newWidth = this._absRight - this._absLeft;
-        const newHeight = this._absTop - this._absBottom;
+        const newHeight = this._isUnrealScreenUi() ? this._absBottom - this._absTop :
+            this._absTop - this._absBottom;
 
         if (propagateCalculatedWidth) {
             this._setWidth(newWidth);
@@ -2858,8 +2888,15 @@ class ElementComponent extends Component {
 
             clipL = Math.min(Math.min(corners[0].x, corners[1].x), Math.min(corners[2].x, corners[3].x));
             clipR = Math.max(Math.max(corners[0].x, corners[1].x), Math.max(corners[2].x, corners[3].x));
-            clipB = Math.min(Math.min(corners[0].y, corners[1].y), Math.min(corners[2].y, corners[3].y));
-            clipT = Math.max(Math.max(corners[0].y, corners[1].y), Math.max(corners[2].y, corners[3].y));
+            const minY = Math.min(Math.min(corners[0].y, corners[1].y), Math.min(corners[2].y, corners[3].y));
+            const maxY = Math.max(Math.max(corners[0].y, corners[1].y), Math.max(corners[2].y, corners[3].y));
+            if (this._isUnrealScreenSpace()) {
+                clipT = minY;
+                clipB = maxY;
+            } else {
+                clipB = minY;
+                clipT = maxY;
+            }
         } else {
             const sw = this.system.app.graphicsDevice.width;
             const sh = this.system.app.graphicsDevice.height;
@@ -2868,8 +2905,13 @@ class ElementComponent extends Component {
             const cameraHeight = camera._rect.w * sh;
             clipL = camera._rect.x * sw;
             clipR = clipL + cameraWidth;
-            clipT = (1 - camera._rect.y) * sh;
-            clipB = clipT - cameraHeight;
+            if (this._isUnrealScreenSpace()) {
+                clipT = camera._rect.y * sh;
+                clipB = clipT + cameraHeight;
+            } else {
+                clipT = (1 - camera._rect.y) * sh;
+                clipB = clipT - cameraHeight;
+            }
         }
 
         // A text element's rendered glyphs can overflow its element box (e.g. wrapped text that is
@@ -2884,7 +2926,13 @@ class ElementComponent extends Component {
             if (overflowX > 0 || overflowY > 0) {
                 const ha = this.alignment.x;
                 const va = this.alignment.y;
-                hitCorners = this._calcScreenCorners(
+                hitCorners = this._isUnrealScreenSpace() ? this._calcScreenCorners(
+                    this._absLeft - ha * overflowX,
+                    this._absBottom + (1 - va) * overflowY,
+                    this._absRight + (1 - ha) * overflowX,
+                    this._absTop - va * overflowY,
+                    tmpCorners
+                ) : this._calcScreenCorners(
                     this._absLeft - ha * overflowX,
                     this._absBottom - va * overflowY,
                     this._absRight + (1 - ha) * overflowX,
@@ -2896,10 +2944,12 @@ class ElementComponent extends Component {
 
         const left = Math.min(Math.min(hitCorners[0].x, hitCorners[1].x), Math.min(hitCorners[2].x, hitCorners[3].x));
         const right = Math.max(Math.max(hitCorners[0].x, hitCorners[1].x), Math.max(hitCorners[2].x, hitCorners[3].x));
-        const bottom = Math.min(Math.min(hitCorners[0].y, hitCorners[1].y), Math.min(hitCorners[2].y, hitCorners[3].y));
-        const top = Math.max(Math.max(hitCorners[0].y, hitCorners[1].y), Math.max(hitCorners[2].y, hitCorners[3].y));
+        const minY = Math.min(Math.min(hitCorners[0].y, hitCorners[1].y), Math.min(hitCorners[2].y, hitCorners[3].y));
+        const maxY = Math.max(Math.max(hitCorners[0].y, hitCorners[1].y), Math.max(hitCorners[2].y, hitCorners[3].y));
+        const outsideVerticalClip = this._isUnrealScreenSpace() ? maxY < clipT || minY > clipB :
+            minY > clipT || maxY < clipB;
 
-        if (right < clipL || left > clipR || bottom > clipT || top < clipB) {
+        if (right < clipL || left > clipR || outsideVerticalClip) {
             return false;
         }
 
@@ -2912,6 +2962,18 @@ class ElementComponent extends Component {
         }
 
         return false;
+    }
+
+    _isUnrealScreenSpace() {
+        return this._isUnrealScreenUi() && this._isScreenSpace();
+    }
+
+    _isUnrealScreenUi() {
+        return this.screen?.coordinateSystem === 'unreal';
+    }
+
+    _isUnrealWorldSpaceScreenUi() {
+        return this._isUnrealScreenUi() && !this._isScreenSpace();
     }
 
     _isScreenCulled() {

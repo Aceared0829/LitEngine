@@ -1,5 +1,6 @@
 import { EventHandler } from '../../core/event-handler.js';
 import { Quat } from '../../core/math/quat.js';
+import { copyXrRotationToEngine, copyXrVectorToEngine } from './xr-coordinate.js';
 import { Vec3 } from '../../core/math/vec3.js';
 
 /**
@@ -186,19 +187,23 @@ class XrHitTestSource extends EventHandler {
 
         const position = poolVec3.pop() ?? new Vec3();
         const rotation = poolQuat.pop() ?? new Quat();
+        const hitPosition = poolVec3.pop() ?? new Vec3();
+        const hitRotation = poolQuat.pop() ?? new Quat();
 
         for (let i = 0; i < results.length; i++) {
             const pose = results[i].getPose(this.manager._referenceSpace);
 
-            const distance = origin.distance(pose.transform.position);
+            copyXrVectorToEngine(this.manager, pose.transform.position, hitPosition);
+            copyXrRotationToEngine(this.manager, pose.transform.orientation, hitRotation);
+            const distance = origin.distance(hitPosition);
             if (distance >= candidateDistance) {
                 continue;
             }
 
             candidateDistance = distance;
             candidateHitTestResult = results[i];
-            position.copy(pose.transform.position);
-            rotation.copy(pose.transform.orientation);
+            position.copy(hitPosition);
+            rotation.copy(hitRotation);
         }
 
         this.fire('result', position, rotation, inputSource || this._inputSource, candidateHitTestResult);
@@ -206,7 +211,9 @@ class XrHitTestSource extends EventHandler {
 
         poolVec3.push(origin);
         poolVec3.push(position);
+        poolVec3.push(hitPosition);
         poolQuat.push(rotation);
+        poolQuat.push(hitRotation);
     }
 }
 

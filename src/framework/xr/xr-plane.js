@@ -1,12 +1,15 @@
 import { EventHandler } from '../../core/event-handler.js';
 import { Quat } from '../../core/math/quat.js';
 import { Vec3 } from '../../core/math/vec3.js';
+import { copyXrRotationToEngine, copyXrVectorToEngine } from './xr-coordinate.js';
 
 /**
  * @import { XrPlaneDetection } from './xr-plane-detection.js'
  */
 
 let ids = 0;
+
+const _point = new Vec3();
 
 /**
  * Represents a detected plane in the real world, providing its position, rotation, polygon points,
@@ -76,6 +79,12 @@ class XrPlane extends EventHandler {
     /** @private */
     _rotation = new Quat();
 
+    /** @private */
+    _convertedPoints = null;
+
+    /** @private */
+    _convertedPointsSource = null;
+
     /**
      * Create a new XrPlane instance.
      *
@@ -108,13 +117,15 @@ class XrPlane extends EventHandler {
         const manager = this._planeDetection._manager;
         const pose = frame.getPose(this._xrPlane.planeSpace, manager._referenceSpace);
         if (pose) {
-            this._position.copy(pose.transform.position);
-            this._rotation.copy(pose.transform.orientation);
+            copyXrVectorToEngine(manager, pose.transform.position, this._position);
+            copyXrRotationToEngine(manager, pose.transform.orientation, this._rotation);
         }
 
         // has not changed
         if (this._lastChangedTime !== this._xrPlane.lastChangedTime) {
             this._lastChangedTime = this._xrPlane.lastChangedTime;
+            this._convertedPoints = null;
+            this._convertedPointsSource = null;
 
             // attributes have been changed
             this.fire('change');
@@ -197,7 +208,22 @@ class XrPlane extends EventHandler {
      * }
      */
     get points() {
-        return this._xrPlane.polygon;
+        const manager = this._planeDetection._manager;
+        const source = this._xrPlane.polygon;
+        if (manager.app.coordinateSystem !== 'unreal') {
+            return source;
+        }
+
+        if (this._convertedPointsSource !== source) {
+            const points = source.map((point) => {
+                copyXrVectorToEngine(manager, point, _point);
+                return new DOMPoint(_point.x, _point.y, _point.z, point.w);
+            });
+            points.reverse();
+            this._convertedPoints = points;
+            this._convertedPointsSource = source;
+        }
+        return this._convertedPoints;
     }
 
     /**

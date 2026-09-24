@@ -150,6 +150,36 @@ describe('SpriteComponent', function () {
         }
     });
 
+    it('maps world sprites to the Unreal XZ plane without changing the legacy asset mesh', function () {
+        const entity = new Entity();
+        app.root.addChild(entity);
+        entity.addComponent('sprite', { spriteAsset });
+        const legacyMesh = entity.sprite._meshInstance.mesh;
+        const legacyPositions = [];
+        legacyMesh.getPositions(legacyPositions);
+
+        entity.coordinateSystem = 'unreal';
+        entity.sprite._updateTransform();
+        entity.sprite._showFrame(entity.sprite.frame);
+
+        const unrealMesh = entity.sprite._meshInstance.mesh;
+        const unrealPositions = [];
+        const unrealNormals = [];
+        unrealMesh.getPositions(unrealPositions);
+        unrealMesh.getNormals(unrealNormals);
+
+        expect(unrealMesh).not.to.equal(legacyMesh);
+        expect(unrealPositions[0]).to.equal(legacyPositions[0]);
+        expect(unrealPositions[1]).to.equal(0);
+        expect(unrealPositions[2]).to.equal(legacyPositions[1]);
+        expect(unrealNormals.slice(0, 3).map(value => value || 0)).to.deep.equal([0, 1, 0]);
+        expect(entity.sprite._node.getLocalScale().toArray()).to.deep.equal([1, 1, 1]);
+        expect(entity.sprite._node.getLocalPosition().toArray()).to.deep.equal([0, 0, 0]);
+        const originalAfterConversion = [];
+        legacyMesh.getPositions(originalAfterConversion);
+        expect(originalAfterConversion).to.deep.equal(legacyPositions);
+    });
+
     it('Add / Remove Component', function () {
         const e = new Entity();
 

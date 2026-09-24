@@ -7,7 +7,7 @@
  *
  * @typedef {object} Transform
  * @property {number[]} position - Local position XYZ.
- * @property {number[]} rotation - Local Euler rotation XYZ in degrees.
+ * @property {number[]} rotation - Local Unreal Euler degrees in XYZ order: Roll, Pitch, Yaw.
  * @property {number[]} scale - Local scale XYZ.
  *
  * @typedef {object} EntitySnapshot
@@ -35,6 +35,10 @@
  *
  * @typedef {{ type: 'selectEntity', entityId: string | null }} SelectEntityCommand
  * @typedef {{ type: 'setTransform', entityId: string, transform: Transform, label?: string }} SetTransformCommand
+ * @typedef {{ type: 'beginTransformDrag', entityId: string, gestureId: number }} BeginTransformDragCommand
+ * @typedef {{ type: 'previewTransformDrag', entityId: string, gestureId: number, field: 'position'|'rotation'|'scale', index: number, value: number }} PreviewTransformDragCommand
+ * @typedef {{ type: 'endTransformDrag', entityId: string, gestureId: number, label: string }} EndTransformDragCommand
+ * @typedef {{ type: 'cancelTransformDrag', entityId: string, gestureId: number }} CancelTransformDragCommand
  * @typedef {{ type: 'resetTransformField', entityId: string, field: 'position'|'rotation'|'scale' }} ResetTransformFieldCommand
  * @typedef {{ type: 'setTransformTool', tool: TransformTool }} SetTransformToolCommand
  * @typedef {{ type: 'setCoordinateSpace', coordinateSpace: CoordinateSpace }} SetCoordinateSpaceCommand
@@ -47,7 +51,7 @@
  * @typedef {{ type: 'setFlySpeed', speed: number }} SetFlySpeedCommand
  * @typedef {{ type: 'resetScene' }} ResetSceneCommand
  *
- * @typedef {SelectEntityCommand | SetTransformCommand | ResetTransformFieldCommand | SetTransformToolCommand | SetCoordinateSpaceCommand | SetSnapEnabledCommand | SetSnapIncrementCommand | UndoCommand | RedoCommand | FocusSelectedCommand | FrameAllCommand | SetFlySpeedCommand | ResetSceneCommand} EditorCommand
+ * @typedef {SelectEntityCommand | SetTransformCommand | BeginTransformDragCommand | PreviewTransformDragCommand | EndTransformDragCommand | CancelTransformDragCommand | ResetTransformFieldCommand | SetTransformToolCommand | SetCoordinateSpaceCommand | SetSnapEnabledCommand | SetSnapIncrementCommand | UndoCommand | RedoCommand | FocusSelectedCommand | FrameAllCommand | SetFlySpeedCommand | ResetSceneCommand} EditorCommand
  *
  * @typedef {{ type: 'ready', scene: SceneSnapshot, history: HistorySnapshot, snap: SnapSettings }} ReadyEvent
  * @typedef {{ type: 'sceneChanged', scene: SceneSnapshot }} SceneChangedEvent

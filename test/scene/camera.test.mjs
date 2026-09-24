@@ -10,6 +10,12 @@ import { ASPECT_AUTO, ASPECT_MANUAL, PROJECTION_ORTHOGRAPHIC } from '../../src/s
 import { createApp } from '../app.mjs';
 import { jsdomSetup, jsdomTeardown } from '../jsdom.mjs';
 
+const createLegacyCamera = (device) => {
+    const camera = new Camera(device);
+    camera.coordinateSystem = 'legacy';
+    return camera;
+};
+
 /**
  * @import { Application } from '../../src/framework/application.js'
  */
@@ -34,12 +40,12 @@ describe('Camera', function () {
         it('requires a graphics device', function () {
             // Debug.assert is stripped in production, so this throws in dev builds only via
             // the assertion; we simply verify that passing the device works.
-            const camera = new Camera(app.graphicsDevice);
+            const camera = createLegacyCamera(app.graphicsDevice);
             expect(camera.device).to.equal(app.graphicsDevice);
         });
 
         it('defaults to ASPECT_AUTO', function () {
-            const camera = new Camera(app.graphicsDevice);
+            const camera = createLegacyCamera(app.graphicsDevice);
             expect(camera.aspectRatioMode).to.equal(ASPECT_AUTO);
         });
     });
@@ -47,14 +53,14 @@ describe('Camera', function () {
     describe('#setClearColor', function () {
 
         it('sets the attachment 0 color, which is the clearColor', function () {
-            const camera = new Camera(app.graphicsDevice);
+            const camera = createLegacyCamera(app.graphicsDevice);
             camera.setClearColor(0, new Color(0.1, 0.2, 0.3, 0.4));
             expect(camera.clearColor.equals(new Color(0.1, 0.2, 0.3, 0.4))).to.equal(true);
             expect(camera.getClearColor(0)).to.equal(camera.clearColor);
         });
 
         it('other attachments clear to the attachment 0 color until given their own', function () {
-            const camera = new Camera(app.graphicsDevice);
+            const camera = createLegacyCamera(app.graphicsDevice);
             expect(camera.getClearColor(1)).to.equal(camera.clearColor);
 
             camera.setClearColor(1, new Color(1, 0, 0, 1));
@@ -63,7 +69,7 @@ describe('Camera', function () {
         });
 
         it('copies the color rather than referencing it', function () {
-            const camera = new Camera(app.graphicsDevice);
+            const camera = createLegacyCamera(app.graphicsDevice);
             const color = new Color(1, 0, 0, 1);
             camera.setClearColor(1, color);
             color.set(0, 1, 0, 1);
@@ -71,14 +77,14 @@ describe('Camera', function () {
         });
 
         it('null removes the color of an attachment', function () {
-            const camera = new Camera(app.graphicsDevice);
+            const camera = createLegacyCamera(app.graphicsDevice);
             camera.setClearColor(1, new Color(1, 0, 0, 1));
             camera.setClearColor(1, null);
             expect(camera.getClearColor(1)).to.equal(camera.clearColor);
         });
 
         it('is copied by clone()', function () {
-            const camera = new Camera(app.graphicsDevice);
+            const camera = createLegacyCamera(app.graphicsDevice);
             camera.setClearColor(1, new Color(1, 0, 0, 1));
             camera.setClearColor(3, new Color(0, 0, 1, 1));
 
@@ -95,14 +101,14 @@ describe('Camera', function () {
         it('reflects the backbuffer size synchronously', function () {
             app.graphicsDevice.setResolution(800, 400);
 
-            const camera = new Camera(app.graphicsDevice);
+            const camera = createLegacyCamera(app.graphicsDevice);
             expect(camera.aspectRatio).to.equal(2);
         });
 
         it('updates when renderTarget is assigned', function () {
             app.graphicsDevice.setResolution(800, 400);
 
-            const camera = new Camera(app.graphicsDevice);
+            const camera = createLegacyCamera(app.graphicsDevice);
             expect(camera.aspectRatio).to.equal(2);
 
             // attach a mock render target with different dimensions
@@ -116,7 +122,7 @@ describe('Camera', function () {
         it('updates when rect changes (viewport aspect ratio)', function () {
             app.graphicsDevice.setResolution(1000, 1000);
 
-            const camera = new Camera(app.graphicsDevice);
+            const camera = createLegacyCamera(app.graphicsDevice);
             expect(camera.aspectRatio).to.equal(1);
 
             // half-width viewport on a square render target -> 1:2 viewport aspect
@@ -127,7 +133,7 @@ describe('Camera', function () {
         it('updates when the backbuffer is resized', function () {
             app.graphicsDevice.setResolution(800, 400);
 
-            const camera = new Camera(app.graphicsDevice);
+            const camera = createLegacyCamera(app.graphicsDevice);
             expect(camera.aspectRatio).to.equal(2);
 
             app.graphicsDevice.setResolution(1600, 400);
@@ -137,7 +143,7 @@ describe('Camera', function () {
         it('recomputes when switching from MANUAL to AUTO', function () {
             app.graphicsDevice.setResolution(800, 400);
 
-            const camera = new Camera(app.graphicsDevice);
+            const camera = createLegacyCamera(app.graphicsDevice);
             camera.aspectRatioMode = ASPECT_MANUAL;
             camera.aspectRatio = 3.14;
             expect(camera.aspectRatio).to.equal(3.14);
@@ -152,7 +158,7 @@ describe('Camera', function () {
         it('preserves the manually assigned value', function () {
             app.graphicsDevice.setResolution(800, 400);
 
-            const camera = new Camera(app.graphicsDevice);
+            const camera = createLegacyCamera(app.graphicsDevice);
             camera.aspectRatioMode = ASPECT_MANUAL;
             camera.aspectRatio = 2.5;
             expect(camera.aspectRatio).to.equal(2.5);
@@ -171,7 +177,7 @@ describe('Camera', function () {
         it('refreshes after a backbuffer resize (no setter touched)', function () {
             app.graphicsDevice.setResolution(800, 400);
 
-            const camera = new Camera(app.graphicsDevice);
+            const camera = createLegacyCamera(app.graphicsDevice);
 
             // prime the projection matrix cache
             const before = camera.projectionMatrix.clone();
@@ -189,7 +195,7 @@ describe('Camera', function () {
     describe('#projectionOffset', function () {
 
         it('defaults to (0, 0) and copies the assigned value', function () {
-            const camera = new Camera(app.graphicsDevice);
+            const camera = createLegacyCamera(app.graphicsDevice);
             expect(camera.projectionOffset.equals(new Vec2())).to.equal(true);
 
             const value = new Vec2(0.25, -0.5);
@@ -199,7 +205,7 @@ describe('Camera', function () {
         });
 
         it('applies off-center terms to the perspective projection matrix', function () {
-            const camera = new Camera(app.graphicsDevice);
+            const camera = createLegacyCamera(app.graphicsDevice);
             const before = camera.projectionMatrix.clone();
 
             camera.projectionOffset = new Vec2(0.25, -0.5);
@@ -216,7 +222,7 @@ describe('Camera', function () {
         });
 
         it('translates the orthographic projection window', function () {
-            const camera = new Camera(app.graphicsDevice);
+            const camera = createLegacyCamera(app.graphicsDevice);
             camera.projection = PROJECTION_ORTHOGRAPHIC;
             const before = camera.projectionMatrix.clone();
 
@@ -236,7 +242,7 @@ describe('Camera', function () {
         it('keeps worldToScreen and screenToWorld consistent', function () {
             app.graphicsDevice.setResolution(800, 400);
 
-            const camera = new Camera(app.graphicsDevice);
+            const camera = createLegacyCamera(app.graphicsDevice);
             camera.node = new Entity();
             camera.projectionOffset = new Vec2(0.3, -0.2);
 
@@ -251,7 +257,7 @@ describe('Camera', function () {
         });
 
         it('offsets the frustum corners', function () {
-            const camera = new Camera(app.graphicsDevice);
+            const camera = createLegacyCamera(app.graphicsDevice);
             camera.aspectRatioMode = ASPECT_MANUAL;
             camera.aspectRatio = 1;
             camera.fov = 90;
@@ -270,7 +276,7 @@ describe('Camera', function () {
         });
 
         it('is transferred by clone()', function () {
-            const camera = new Camera(app.graphicsDevice);
+            const camera = createLegacyCamera(app.graphicsDevice);
             camera.projectionOffset = new Vec2(0.1, 0.2);
 
             const clone = camera.clone();
@@ -283,7 +289,7 @@ describe('Camera', function () {
         it('preserves aspect ratio state', function () {
             app.graphicsDevice.setResolution(800, 400);
 
-            const camera = new Camera(app.graphicsDevice);
+            const camera = createLegacyCamera(app.graphicsDevice);
             expect(camera.aspectRatio).to.equal(2);
 
             const clone = camera.clone();

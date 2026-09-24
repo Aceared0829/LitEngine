@@ -2,12 +2,17 @@ import { platform } from '../../core/platform.js';
 import { EventHandler } from '../../core/event-handler.js';
 import { XRSPACE_VIEWER } from './constants.js';
 import { XrHitTestSource } from './xr-hit-test-source.js';
+import { Vec3 } from '../../core/math/vec3.js';
+import { copyEngineVectorToXr } from './xr-coordinate.js';
 
 /**
  * @import { Ray } from '../../core/shape/ray.js'
  * @import { XrInputSource } from './xr-input-source.js'
  * @import { XrManager } from './xr-manager.js'
  */
+
+const _rayOrigin = new Vec3();
+const _rayDirection = new Vec3();
 
 /**
  * @callback XrHitTestStartCallback
@@ -269,8 +274,10 @@ class XrHitTest extends EventHandler {
         let xrRay;
         const offsetRay = options.offsetRay;
         if (offsetRay) {
-            const origin = new DOMPoint(offsetRay.origin.x, offsetRay.origin.y, offsetRay.origin.z, 1.0);
-            const direction = new DOMPoint(offsetRay.direction.x, offsetRay.direction.y, offsetRay.direction.z, 0.0);
+            copyEngineVectorToXr(this.manager, offsetRay.origin, _rayOrigin);
+            copyEngineVectorToXr(this.manager, offsetRay.direction, _rayDirection);
+            const origin = new DOMPoint(_rayOrigin.x, _rayOrigin.y, _rayOrigin.z, 1.0);
+            const direction = new DOMPoint(_rayDirection.x, _rayDirection.y, _rayDirection.z, 0.0);
             xrRay = new XRRay(origin, direction);
         }
 

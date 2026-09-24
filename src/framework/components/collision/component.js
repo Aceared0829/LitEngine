@@ -1,3 +1,4 @@
+import { unrealEulerToRotation } from '../../../core/math/coordinate-conversion.js';
 import { Quat } from '../../../core/math/quat.js';
 import { Vec3 } from '../../../core/math/vec3.js';
 import { Asset } from '../../asset/asset.js';
@@ -212,6 +213,8 @@ class CollisionComponent extends Component {
     constructor(system, entity) {
         super(system, entity);
 
+        this._axis = entity.coordinateSystem === 'unreal' ? 2 : 1;
+
         this.entity.on('insert', this._onInsert, this);
     }
 
@@ -321,7 +324,8 @@ class CollisionComponent extends Component {
 
     /**
      * Sets the rotational offset of the collision shape from the Entity rotation in local space.
-     * Defaults to identity.
+     * Defaults to identity. A three-number Euler array uses legacy XYZ angles, or Unreal Roll,
+     * Pitch, Yaw when the owning entity uses Unreal coordinates. Quaternions retain XYZW values.
      *
      * @type {Quat}
      */
@@ -329,8 +333,11 @@ class CollisionComponent extends Component {
         if (arg instanceof Quat) {
             this._angularOffset.copy(arg);
         } else if (arg.length === 3) {
-            // allow for euler angles to be passed as a 3 length array
-            this._angularOffset.setFromEulerAngles(arg[0], arg[1], arg[2]);
+            if (this.entity.coordinateSystem === 'unreal') {
+                unrealEulerToRotation(new Vec3(arg[0], arg[1], arg[2]), this._angularOffset);
+            } else {
+                this._angularOffset.setFromEulerAngles(arg[0], arg[1], arg[2]);
+            }
         } else {
             this._angularOffset.set(arg[0], arg[1], arg[2], arg[3]);
         }
@@ -378,7 +385,8 @@ class CollisionComponent extends Component {
 
     /**
      * Sets the local space axis with which the capsule, cylinder or cone-shaped collision volume's
-     * length is aligned. 0 for X, 1 for Y and 2 for Z. Defaults to 1 (Y-axis).
+     * length is aligned. 0 for X, 1 for Y and 2 for Z. Defaults to 1 (Y-axis), or 2 (Z-axis)
+     * when the owning entity uses Unreal coordinates before the component is added.
      *
      * @type {number}
      */

@@ -1023,9 +1023,9 @@ class ElementInput {
         const cameraHeight = camera.rect.w * sh;
         const cameraLeft = camera.rect.x * sw;
         const cameraRight = cameraLeft + cameraWidth;
-        // camera bottom (origin is bottom left of window)
-        const cameraBottom = (1 - camera.rect.y) * sh;
-        const cameraTop = cameraBottom - cameraHeight;
+        const unrealUi = this.app.coordinateSystem === 'unreal';
+        const cameraTop = (1 - camera.rect.y) * sh - cameraHeight;
+        const cameraBottom = cameraTop + cameraHeight;
 
         let _x = x * sw / this._target.clientWidth;
         let _y = y * sh / this._target.clientHeight;
@@ -1037,8 +1037,10 @@ class ElementInput {
             _x = sw * (_x - cameraLeft) / cameraWidth;
             _y = sh * (_y - cameraTop) / cameraHeight;
 
-            // reverse _y
-            _y = sh - _y;
+            if (!unrealUi) {
+                // Legacy screen UI uses a bottom-left origin for hit testing.
+                _y = sh - _y;
+            }
 
             ray.origin.set(_x, _y, 1);
             ray.direction.set(0, 0, -1);
@@ -1117,13 +1119,20 @@ class ElementInput {
         if (button) {
             const hitPadding = element.entity.button.hitPadding || ZERO_VEC4;
 
-            _paddingTop.copy(element.entity.up);
+            if (element._isScreenSpace()) {
+                _paddingTop.sub2(hitCorners[3], hitCorners[0]).normalize();
+                _paddingRight.sub2(hitCorners[1], hitCorners[0]).normalize();
+            } else {
+                _paddingTop.copy(element.entity.up);
+                _paddingRight.copy(element.entity.right);
+            }
             _paddingBottom.copy(_paddingTop).mulScalar(-1);
-            _paddingRight.copy(element.entity.right);
             _paddingLeft.copy(_paddingRight).mulScalar(-1);
 
-            _paddingTop.mulScalar(hitPadding.w * scale.y);
-            _paddingBottom.mulScalar(hitPadding.y * scale.y);
+            const topPadding = element._isUnrealScreenSpace() ? hitPadding.y : hitPadding.w;
+            const bottomPadding = element._isUnrealScreenSpace() ? hitPadding.w : hitPadding.y;
+            _paddingTop.mulScalar(topPadding * scale.y);
+            _paddingBottom.mulScalar(bottomPadding * scale.y);
             _paddingRight.mulScalar(hitPadding.z * scale.x);
             _paddingLeft.mulScalar(hitPadding.x * scale.x);
 

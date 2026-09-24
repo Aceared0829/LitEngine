@@ -117,6 +117,7 @@ createOptions.xr = XrManager;
 createOptions.elementInput = new ElementInput(canvas);
 
 const app = new AppBase(canvas);
+app.coordinateSystem = 'legacy';
 app.init(createOptions);
 
 app.setCanvasFillMode(FILLMODE_FILL_WINDOW);

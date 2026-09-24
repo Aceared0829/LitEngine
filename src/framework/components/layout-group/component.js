@@ -94,6 +94,11 @@ class LayoutGroupComponent extends Component {
     constructor(system, entity) {
         super(system, entity);
 
+        if (entity.coordinateSystem === 'unreal') {
+            this._reverseY = false;
+            this._alignment.y = 0;
+        }
+
         // Listen for the group container being resized
         this._listenForReflowEvents(this.entity, 'on');
 
@@ -187,8 +192,10 @@ class LayoutGroupComponent extends Component {
     }
 
     /**
-     * Sets the horizontal and vertical alignment of child elements. Values range from 0 to 1 where
-     * `[0, 0]` is the bottom left and `[1, 1]` is the top right. Defaults to `[0, 1]`.
+     * Sets the horizontal and vertical alignment of child elements. Values range from 0 to 1.
+     * Legacy screen-space groups use `[0, 0]` for bottom-left and `[1, 1]` for top-right; Unreal
+     * screen-space groups use `[0, 0]` for top-left and `[1, 1]` for bottom-right. The default is
+     * `[0, 1]` in legacy mode and `[0, 0]` in Unreal mode.
      *
      * @type {Vec2}
      */

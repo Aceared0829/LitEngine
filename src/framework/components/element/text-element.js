@@ -271,10 +271,12 @@ class TextElement {
         } else {
             this._updateMaterial(false);
         }
+        if (this._font) this._updateText();
     }
 
     _onScreenSpaceChange(value) {
         this._updateMaterial(value);
+        if (this._font) this._updateText();
     }
 
     _onDrawOrderChange(order) {
@@ -1380,7 +1382,11 @@ class TextElement {
                 const gapWidth = justified ? slack / numGaps : 0;
 
                 const hoffset = -hp * this._element.calculatedWidth + (justified ? 0 : ha * slack * (this._rtl ? -1 : 1));
-                const voffset = (1 - vp) * this._element.calculatedHeight - fontMaxY - (1 - va) * (this._element.calculatedHeight - this.height);
+                const unrealScreenUi = this._element._isUnrealScreenUi();
+                const voffset = unrealScreenUi ? fontMaxY - vp * this._element.calculatedHeight +
+                    va * (this._element.calculatedHeight - this.height) :
+                    (1 - vp) * this._element.calculatedHeight - fontMaxY -
+                    (1 - va) * (this._element.calculatedHeight - this.height);
 
                 for (let quad = prevQuad; quad <= index; quad++) {
                     const qoffset = justified ?
@@ -1392,10 +1398,12 @@ class TextElement {
                     this._meshInfo[i].positions[quad * 4 * 3 + 6] += qoffset;
                     this._meshInfo[i].positions[quad * 4 * 3 + 9] += qoffset;
 
-                    this._meshInfo[i].positions[quad * 4 * 3 + 1] += voffset;
-                    this._meshInfo[i].positions[quad * 4 * 3 + 4] += voffset;
-                    this._meshInfo[i].positions[quad * 4 * 3 + 7] += voffset;
-                    this._meshInfo[i].positions[quad * 4 * 3 + 10] += voffset;
+                    for (let vertex = 0; vertex < 4; vertex++) {
+                        const positionIndex = quad * 4 * 3 + vertex * 3 + 1;
+                        const y = this._meshInfo[i].positions[positionIndex];
+                        this._meshInfo[i].positions[positionIndex] =
+                            (unrealScreenUi ? -y : y) + voffset;
+                    }
                 }
 
                 // flip rtl characters

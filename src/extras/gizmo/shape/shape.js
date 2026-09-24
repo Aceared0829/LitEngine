@@ -7,6 +7,7 @@ import { CULLFACE_BACK } from '../../../platform/graphics/constants.js';
 import { BLEND_NORMAL } from '../../../scene/constants.js';
 
 import { COLOR_GRAY } from '../color.js';
+import { setLegacyLocalEulerAngles } from '../coordinate-utils.js';
 import { Geometry } from '../../../scene/geometry/geometry.js';
 import { unlitShader } from '../shaders.js';
 
@@ -205,7 +206,7 @@ class Shape {
         // entity
         this.entity = new Entity(`${name}:${this.axis}`);
         this.entity.setLocalPosition(this._position);
-        this.entity.setLocalEulerAngles(this._rotation);
+        setLegacyLocalEulerAngles(this.entity, this._rotation);
         this.entity.setLocalScale(this._scale);
     }
 
@@ -289,7 +290,7 @@ class Shape {
      */
     _update() {
         this.entity.setLocalPosition(this._position);
-        this.entity.setLocalEulerAngles(this._rotation);
+        setLegacyLocalEulerAngles(this.entity, this._rotation);
         this.entity.setLocalScale(this._scale);
     }
 

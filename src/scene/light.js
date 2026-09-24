@@ -82,7 +82,7 @@ class LightRenderData {
         this.camera = camera;
 
         // camera used to cull / render the shadow map
-        this.shadowCamera = ShadowRenderer.createShadowCamera(light.device, light._shadowType, light._type, face);
+        this.shadowCamera = ShadowRenderer.createShadowCamera(light.device, light._shadowType, light._type, face, light._node.coordinateSystem);
 
         // shadow view-projection matrix
         this.shadowMatrix = new Mat4();
@@ -1035,14 +1035,14 @@ class Light {
             const angle = this._outerConeAngle;
             const cosAngle = this._outerConeAngleCos;
             const node = this._node;
-            tmpVec.copy(node.up);
+            tmpVec.copy(node.coordinateSystem === 'unreal' ? node.forward : node.up);
 
             if (angle > 45) {
                 sphere.radius = size * this._outerConeAngleSin;
-                tmpVec.mulScalar(-size * cosAngle);
+                tmpVec.mulScalar((node.coordinateSystem === 'unreal' ? 1 : -1) * size * cosAngle);
             } else {
                 sphere.radius = size / (2 * cosAngle);
-                tmpVec.mulScalar(-sphere.radius);
+                tmpVec.mulScalar((node.coordinateSystem === 'unreal' ? 1 : -1) * sphere.radius);
             }
 
             sphere.center.add2(node.getPosition(), tmpVec);
@@ -1061,7 +1061,11 @@ class Light {
 
             const scl = Math.abs(Math.sin(angle * math.DEG_TO_RAD) * range);
 
-            box.center.set(0, -range * 0.5, 0);
+            if (node.coordinateSystem === 'unreal') {
+                box.center.set(range * 0.5, 0, 0);
+            } else {
+                box.center.set(0, -range * 0.5, 0);
+            }
             box.halfExtents.set(scl, range * 0.5, scl);
 
             box.setFromTransformedAabb(box, node.getWorldTransform(), true);

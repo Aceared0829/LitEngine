@@ -14,6 +14,9 @@ import { VertexBuffer } from '../../platform/graphics/vertex-buffer.js';
 
 // Container resource returned by the GlbParser. Implements the ContainerResource interface.
 class GlbContainerResource {
+    /** @type {'legacy'|'unreal'} */
+    _coordinateSystem = 'unreal';
+
     constructor(data, asset, assets, defaultMaterial) {
         const createAsset = function (type, resource, index) {
             const subAsset = GlbContainerResource.createAsset(asset.name, type, resource, index);
@@ -59,6 +62,7 @@ class GlbContainerResource {
         this._assetName = asset.name;
         this._assets = assets;
         this._defaultMaterial = defaultMaterial;
+        this._coordinateSystem = asset.options?.coordinateSystem ?? assets._loader?._app?.coordinateSystem ?? 'unreal';
         this.renders = renders;
         this.materials = materials;
         this.textures = data.textures; // texture assets are created directly
@@ -70,7 +74,7 @@ class GlbContainerResource {
     get model() {
         if (!this._model) {
             // create model only when needed
-            const model = GlbContainerResource.createModel(this.data, this._defaultMaterial);
+            const model = GlbContainerResource.createModel(this.data, this._defaultMaterial, this._coordinateSystem);
             const modelAsset = GlbContainerResource.createAsset(this._assetName, 'model', model, 0);
             this._assets.add(modelAsset);
             this._model = modelAsset;
@@ -89,6 +93,7 @@ class GlbContainerResource {
 
     instantiateModelEntity(options) {
         const entity = new Entity(undefined, this._assets._loader._app);
+        entity.coordinateSystem = this._coordinateSystem;
         entity.addComponent('model', Object.assign({ type: 'asset', asset: this.model }, options));
         return entity;
     }
@@ -181,6 +186,7 @@ class GlbContainerResource {
                                 let target = entity;
                                 if (sa > 0) {
                                     target = new Entity(`${entity.name}_gsplat_${sa}`, this._assets._loader._app);
+                                    target.coordinateSystem = this._coordinateSystem;
                                     entity.addChild(target);
                                 }
                                 target.addComponent('gsplat', { asset: splatAssets[sa] });
@@ -242,7 +248,7 @@ class GlbContainerResource {
         });
 
         // return the scene hierarchy created from scene clones
-        return GlbContainerResource.createSceneHierarchy(sceneClones, Entity);
+        return GlbContainerResource.createSceneHierarchy(sceneClones, Entity, this._coordinateSystem);
     }
 
     // get material variants
@@ -290,7 +296,7 @@ class GlbContainerResource {
     }
 
     // helper function to create a single hierarchy from an array of nodes
-    static createSceneHierarchy(sceneNodes, nodeType) {
+    static createSceneHierarchy(sceneNodes, nodeType, coordinateSystem) {
 
         // create a single root of the hierarchy - either the single scene, or a new Entity parent if multiple scenes
         let root = null;
@@ -305,11 +311,15 @@ class GlbContainerResource {
             }
         }
 
+        if (root && coordinateSystem) {
+            root.coordinateSystem = coordinateSystem;
+        }
+
         return root;
     }
 
     // create a Model from the parsed GLB data structures
-    static createModel(glb, defaultMaterial) {
+    static createModel(glb, defaultMaterial, coordinateSystem) {
 
         const createMeshInstance = function (model, mesh, skins, skinInstances, materials, node, gltfNode) {
             const materialIndex = glb.meshDefaultMaterials[mesh.id];
@@ -346,7 +356,7 @@ class GlbContainerResource {
         }
 
         // node hierarchy for the model
-        model.graph = GlbContainerResource.createSceneHierarchy(glb.scenes, GraphNode);
+        model.graph = GlbContainerResource.createSceneHierarchy(glb.scenes, GraphNode, coordinateSystem);
 
         // create mesh instance for meshes on nodes that are part of hierarchy
         for (let i = 0; i < glb.nodes.length; i++) {

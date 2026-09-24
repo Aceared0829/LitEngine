@@ -81,6 +81,7 @@ async function createApp(deviceType) {
     createOptions.resourceHandlers = [TextureHandler, FontHandler];
 
     const app = new AppBase(canvas);
+app.coordinateSystem = 'legacy';
     app.init(createOptions);
 
     app.setCanvasFillMode(FILLMODE_NONE);

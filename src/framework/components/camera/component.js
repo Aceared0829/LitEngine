@@ -150,6 +150,7 @@ class CameraComponent extends Component {
 
         this._camera = new Camera(system.app.graphicsDevice);
         this._camera.node = entity;
+        this._camera.coordinateSystem = entity.coordinateSystem;
 
         // postprocessing management
         this._postEffects = new PostEffectQueue(system.app, this);
@@ -907,6 +908,21 @@ class CameraComponent extends Component {
     }
 
     /**
+     * Chooses the camera's local axes. `unreal` looks along +X with +Y right/+Z up; `legacy`
+     * preserves the PlayCanvas -Z/+X/+Y basis. The graphics projection stays in conventional
+     * eye space. Defaults to `unreal`; set to `legacy` for existing projects that keep the old basis.
+     *
+     * @type {'legacy'|'unreal'}
+     */
+    set coordinateSystem(value) {
+        this._camera.coordinateSystem = value;
+    }
+
+    get coordinateSystem() {
+        return this._camera.coordinateSystem;
+    }
+
+    /**
      * Gets the camera's projection matrix.
      *
      * @type {Mat4}
@@ -946,8 +962,10 @@ class CameraComponent extends Component {
     }
 
     /**
-     * Sets the rendering rectangle for the camera. This controls where on the screen the camera
-     * will render in normalized screen coordinates. Defaults to `[0, 0, 1, 1]`.
+     * Sets the rendering rectangle for the camera. Values are `[left, bottom, width, height]` in
+     * normalized coordinates with a bottom-left origin, in both coordinate modes. Camera input and
+     * screen projection convert this rectangle to canvas pixel coordinates. Defaults to
+     * `[0, 0, 1, 1]`.
      *
      * @type {Vec4}
      */
@@ -1441,6 +1459,7 @@ class CameraComponent extends Component {
         this.clearColorBuffer = source.clearColorBuffer;
         this.clearDepthBuffer = source.clearDepthBuffer;
         this.clearStencilBuffer = source.clearStencilBuffer;
+        this.coordinateSystem = source.coordinateSystem;
         this.cullFaces = source.cullFaces;
         this.disablePostEffectsLayer = source.disablePostEffectsLayer;
         this.farClip = source.farClip;

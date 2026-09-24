@@ -1,8 +1,8 @@
-import { Entity } from '../entity.js';
-
+import { Debug } from '../../core/debug.js';
 import { CompressUtils } from '../../scene/compress/compress-utils.js';
 import { Decompress } from '../../scene/compress/decompress.js';
-import { Debug } from '../../core/debug.js';
+import { Entity } from '../entity.js';
+import { migrateLegacySceneTransforms, previewMigratedSceneTransforms } from './scene-coordinate-migration.js';
 
 class SceneParser {
     constructor(app, isTemplate) {
@@ -12,6 +12,14 @@ class SceneParser {
     }
 
     parse(data) {
+        if (this._app.coordinateSystem === 'unreal') {
+            if (!data || !Object.hasOwn(data, 'coordinateMigration')) {
+                throw new Error('Unreal coordinate mode requires scene data migrated with migrateLegacySceneTransforms()');
+            }
+            data = migrateLegacySceneTransforms(data);
+        } else if (data && Object.hasOwn(data, 'coordinateMigration')) {
+            data = previewMigratedSceneTransforms(data);
+        }
         const entities = {};
         let parent = null;
 

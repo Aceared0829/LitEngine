@@ -65,6 +65,7 @@ describe('ElementDragHelper', function () {
         graphicsDevice.updateClientRect();
 
         app = new Application(canvas, {
+            coordinateSystem: 'legacy',
             graphicsDevice,
             mouse: new Mouse(canvas),
             touch: new TouchDevice(canvas)

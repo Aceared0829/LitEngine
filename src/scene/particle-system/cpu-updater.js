@@ -256,6 +256,8 @@ class ParticleCPUUpdater {
                     if (emitter.emitterShape === EMITTERSHAPE_SPHERE) {
                         randomPos.copy(rndFactor3Vec).mulScalar(2).sub(Vec3.ONE).normalize();
                         localVelocityVec.add(randomPos.mulScalar(emitter.initialVelocity));
+                    } else if (emitter.meshInstance.node?.coordinateSystem === 'unreal') {
+                        localVelocityVec.x += emitter.initialVelocity;
                     } else {
                         localVelocityVec.add(Vec3.FORWARD.mulScalar(emitter.initialVelocity));
                     }

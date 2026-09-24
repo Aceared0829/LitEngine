@@ -1,7 +1,9 @@
 import { Quat } from '../../core/math/quat.js';
 import { Vec3 } from '../../core/math/vec3.js';
+import { unrealEulerToRotation } from '../../core/math/coordinate-conversion.js';
 import { Http } from '../../platform/net/http.js';
 import { Animation, AnimationKey, AnimationNode } from '../../scene/animation/animation.js';
+import { migrateLegacyAnimationTransforms, previewMigratedAnimationTransforms } from './animation-coordinate-migration.js';
 
 /**
  * Parser for PlayCanvas JSON {@link Animation} resources. Acts as the catch-all (non-glb) animation
@@ -20,12 +22,23 @@ class JsonAnimationParser {
             if (err) {
                 callback(`Error loading animation resource: ${original} [${err}]`);
             } else {
-                callback(null, this[`_parseAnimationV${response.animation.version}`](response));
+                const coordinateSystem = this.handler?.app?.coordinateSystem ?? 'unreal';
+                let data = response;
+                if (coordinateSystem === 'unreal') {
+                    if (!Object.hasOwn(data, 'coordinateMigration')) {
+                        callback('Unreal coordinate mode requires JSON animation data migrated with migrateLegacyAnimationTransforms()');
+                        return;
+                    }
+                    data = migrateLegacyAnimationTransforms(data);
+                } else if (Object.hasOwn(data, 'coordinateMigration')) {
+                    data = previewMigratedAnimationTransforms(data);
+                }
+                callback(null, this[`_parseAnimationV${data.animation.version}`](data, coordinateSystem));
             }
         }, asset);
     }
 
-    _parseAnimationV3(data) {
+    _parseAnimationV3(data, coordinateSystem = 'unreal') {
         const animData = data.animation;
 
         const anim = new Animation();
@@ -46,7 +59,8 @@ class JsonAnimationParser {
                 const r = k.rot;
                 const s = k.scale;
                 const pos = new Vec3(p[0], p[1], p[2]);
-                const rot = new Quat().setFromEulerAngles(r[0], r[1], r[2]);
+                const rot = coordinateSystem === 'unreal' ? unrealEulerToRotation(new Vec3(r)) :
+                    new Quat().setFromEulerAngles(r[0], r[1], r[2]);
                 const scl = new Vec3(s[0], s[1], s[2]);
 
                 const key = new AnimationKey(t, pos, rot, scl);
@@ -60,7 +74,7 @@ class JsonAnimationParser {
         return anim;
     }
 
-    _parseAnimationV4(data) {
+    _parseAnimationV4(data, coordinateSystem = 'unreal') {
         const animData = data.animation;
 
         const anim = new Animation();
@@ -85,7 +99,8 @@ class JsonAnimationParser {
                 const r = defRot ? defRot : k.r;
                 const s = defScl ? defScl : k.s;
                 const pos = new Vec3(p[0], p[1], p[2]);
-                const rot = new Quat().setFromEulerAngles(r[0], r[1], r[2]);
+                const rot = coordinateSystem === 'unreal' ? unrealEulerToRotation(new Vec3(r)) :
+                    new Quat().setFromEulerAngles(r[0], r[1], r[2]);
                 const scl = new Vec3(s[0], s[1], s[2]);
 
                 const key = new AnimationKey(t, pos, rot, scl);

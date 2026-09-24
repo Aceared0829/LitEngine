@@ -18,6 +18,10 @@ const _transform = new Mat4();
  * create an {@link Entity} hierarchy underneath an Entity with a ScreenComponent to create complex
  * user interfaces using the following components:
  *
+ * In Unreal coordinate mode, screen-space and world-space UI use a top-left origin with +X right
+ * and +Y down. World-space screens lie in the Unreal YZ plane. Legacy applications retain the
+ * bottom-left/+Y-up UI convention.
+ *
  * - {@link ButtonComponent}
  * - {@link ElementComponent}
  * - {@link LayoutChildComponent}
@@ -150,9 +154,22 @@ class ScreenComponent extends Component {
         const w = this._resolution.x / this.scale;
         const h = this._resolution.y / this.scale;
 
+        if (!this._screenSpace && this.entity.coordinateSystem === 'unreal') {
+            // Convert the legacy XY screen plane through the Unreal basis while changing the UI
+            // origin from bottom-left to top-left: horizontal maps to +Y, vertical to -Z, and
+            // element depth to +X in the screen entity's local space.
+            this._screenMatrix.set([
+                0, 1, 0, 0,
+                0, 0, -1, 0,
+                1, 0, 0, 0,
+                0, -0.5 * w, 0.5 * h, 1
+            ]);
+            return;
+        }
+
         const left = 0;
         const right = w;
-        const bottom = -h;
+        const bottom = this._isUnrealScreenSpace() ? h : -h;
         const top = 0;
         const near = 1;
         const far = -1;
@@ -163,6 +180,10 @@ class ScreenComponent extends Component {
             _transform.setScale(0.5 * w, 0.5 * h, 1);
             this._screenMatrix.mul2(_transform, this._screenMatrix);
         }
+    }
+
+    _isUnrealScreenSpace() {
+        return this._screenSpace && this.entity.coordinateSystem === 'unreal';
     }
 
     _updateScale() {
@@ -276,7 +297,9 @@ class ScreenComponent extends Component {
 
     /**
      * Sets whether the ScreenComponent will render its child {@link ElementComponent}s in screen
-     * space instead of world space. Enable this to create 2D user interfaces. Defaults to false.
+     * space instead of world space. Enable this to create 2D user interfaces. In Unreal coordinate
+     * mode, all Screen UI uses a top-left origin and +Y down; world-space screens lie in the YZ
+     * plane. Defaults to false.
      *
      * @type {boolean}
      */

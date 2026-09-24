@@ -6,6 +6,7 @@ import { Mat3 } from '../core/math/mat3.js';
 import { Mat4 } from '../core/math/mat4.js';
 import { Quat } from '../core/math/quat.js';
 import { Vec3 } from '../core/math/vec3.js';
+import { unrealEulerToRotation, unrealRotationToEuler } from '../core/math/coordinate-conversion.js';
 
 const scaleCompensatePosTransform = new Mat4();
 const scaleCompensatePos = new Vec3();
@@ -22,6 +23,11 @@ const invParentRot = new Quat();
 const matrix = new Mat4();
 const target = new Vec3();
 const up = new Vec3();
+const unrealUp = Object.freeze(new Vec3(0, 0, 1));
+const lookForward = new Vec3();
+const lookRight = new Vec3();
+const lookVertical = new Vec3();
+const unrealAngles = new Vec3();
 
 /**
  * Helper function that handles signature overloading to receive a test function.
@@ -207,6 +213,28 @@ class GraphNode extends EventHandler {
     /** @private */
     _dirtyNormal = true;
 
+    /** @private */
+    _coordinateSystem = 'unreal';
+
+    /**
+     * Selects the node's semantic local axes. `unreal` uses +X forward, +Y right and +Z up;
+     * `legacy` retains the PlayCanvas -Z forward, +X right and +Y up directions. The underlying
+     * position and quaternion storage is unchanged. Defaults to `unreal`; set to `legacy` for
+     * nodes authored with PlayCanvas's original axis convention.
+     *
+     * @type {'legacy'|'unreal'}
+     */
+    set coordinateSystem(value) {
+        if (value !== 'legacy' && value !== 'unreal') {
+            throw new RangeError(`Unsupported graph node coordinate system: ${value}`);
+        }
+        this._coordinateSystem = value;
+    }
+
+    get coordinateSystem() {
+        return this._coordinateSystem;
+    }
+
     /**
      * @type {Vec3|null}
      * @private
@@ -271,7 +299,8 @@ class GraphNode extends EventHandler {
     }
 
     /**
-     * Gets the normalized local space X-axis vector of the graph node in world space.
+     * Gets the normalized semantic local right-axis vector in world space: +Y in `unreal` mode,
+     * +X in `legacy` mode.
      *
      * @type {Readonly<Vec3>}
      */
@@ -279,11 +308,13 @@ class GraphNode extends EventHandler {
         if (!this._right) {
             this._right = new Vec3();
         }
-        return this.getWorldTransform().getX(this._right).normalize();
+        const transform = this.getWorldTransform();
+        return (this._coordinateSystem === 'unreal' ? transform.getY(this._right) : transform.getX(this._right)).normalize();
     }
 
     /**
-     * Gets the normalized local space Y-axis vector of the graph node in world space.
+     * Gets the normalized semantic local up-axis vector in world space: +Z in `unreal` mode,
+     * +Y in `legacy` mode.
      *
      * @type {Readonly<Vec3>}
      */
@@ -291,11 +322,13 @@ class GraphNode extends EventHandler {
         if (!this._up) {
             this._up = new Vec3();
         }
-        return this.getWorldTransform().getY(this._up).normalize();
+        const transform = this.getWorldTransform();
+        return (this._coordinateSystem === 'unreal' ? transform.getZ(this._up) : transform.getY(this._up)).normalize();
     }
 
     /**
-     * Gets the normalized local space negative Z-axis vector of the graph node in world space.
+     * Gets the normalized semantic local forward-axis vector in world space: +X in `unreal` mode,
+     * -Z in `legacy` mode.
      *
      * @type {Readonly<Vec3>}
      */
@@ -303,7 +336,9 @@ class GraphNode extends EventHandler {
         if (!this._forward) {
             this._forward = new Vec3();
         }
-        return this.getWorldTransform().getZ(this._forward).normalize().mulScalar(-1);
+        const transform = this.getWorldTransform();
+        return this._coordinateSystem === 'unreal' ? transform.getX(this._forward).normalize() :
+            transform.getZ(this._forward).normalize().mulScalar(-1);
     }
 
     /**
@@ -512,6 +547,7 @@ class GraphNode extends EventHandler {
      */
     _cloneInternal(clone) {
         clone.name = this.name;
+        clone.coordinateSystem = this.coordinateSystem;
 
         const tags = this.tags._list;
         clone.tags.clear();
@@ -806,7 +842,7 @@ class GraphNode extends EventHandler {
 
     /**
      * Get the world space rotation for the specified GraphNode in Euler angles. The angles are in
-     * degrees and in XYZ order.
+     * degrees and in XYZ order. Unreal-coordinate nodes return Roll (X), Pitch (Y), Yaw (Z).
      *
      * Important: The value returned by this function should be considered read-only. In order to
      * set the world space rotation of the graph node, use {@link setEulerAngles}.
@@ -818,13 +854,17 @@ class GraphNode extends EventHandler {
      * this.entity.setEulerAngles(angles);
      */
     getEulerAngles() {
-        this.getWorldTransform().getEulerAngles(this.eulerAngles);
+        if (this._coordinateSystem === 'unreal') {
+            unrealRotationToEuler(this.getRotation(), this.eulerAngles);
+        } else {
+            this.getWorldTransform().getEulerAngles(this.eulerAngles);
+        }
         return this.eulerAngles;
     }
 
     /**
      * Get the local space rotation for the specified GraphNode in Euler angles. The angles are in
-     * degrees and in XYZ order.
+     * degrees and in XYZ order. Unreal-coordinate nodes return Roll (X), Pitch (Y), Yaw (Z).
      *
      * Important: The value returned by this function should be considered read-only. In order to
      * set the local space rotation of the graph node, use {@link setLocalEulerAngles}.
@@ -836,7 +876,11 @@ class GraphNode extends EventHandler {
      * this.entity.setLocalEulerAngles(angles);
      */
     getLocalEulerAngles() {
-        this.localRotation.getEulerAngles(this.localEulerAngles);
+        if (this._coordinateSystem === 'unreal') {
+            unrealRotationToEuler(this.localRotation, this.localEulerAngles);
+        } else {
+            this.localRotation.getEulerAngles(this.localEulerAngles);
+        }
         return this.localEulerAngles;
     }
 
@@ -1011,7 +1055,7 @@ class GraphNode extends EventHandler {
 
     /**
      * Sets the local space rotation of the specified graph node using Euler angles. Eulers are
-     * interpreted in XYZ order.
+     * interpreted in XYZ order. Unreal-coordinate nodes use UE Roll (X), Pitch (Y), Yaw (Z).
      *
      * @overload
      * @param {number} x - Rotation around local space x-axis in degrees.
@@ -1024,7 +1068,7 @@ class GraphNode extends EventHandler {
      */
     /**
      * Sets the local space rotation of the specified graph node using Euler angles. Eulers are
-     * interpreted in XYZ order.
+     * interpreted in XYZ order. Unreal-coordinate nodes use UE Roll (X), Pitch (Y), Yaw (Z).
      *
      * @overload
      * @param {Vec3} angles - Vector holding rotations around local space axes in degrees.
@@ -1040,7 +1084,11 @@ class GraphNode extends EventHandler {
      * @param {number} [z] - Rotation around local space z-axis in degrees.
      */
     setLocalEulerAngles(x, y, z) {
-        this.localRotation.setFromEulerAngles(x, y, z);
+        if (this._coordinateSystem === 'unreal') {
+            unrealEulerToRotation(x instanceof Vec3 ? x : unrealAngles.set(x, y, z), this.localRotation);
+        } else {
+            this.localRotation.setFromEulerAngles(x, y, z);
+        }
 
         if (!this._dirtyLocal) {
             this._dirtifyLocal();
@@ -1328,7 +1376,7 @@ class GraphNode extends EventHandler {
 
     /**
      * Sets the world space rotation of the specified graph node using Euler angles. Eulers are
-     * interpreted in XYZ order.
+     * interpreted in XYZ order. Unreal-coordinate nodes use UE Roll (X), Pitch (Y), Yaw (Z).
      *
      * @overload
      * @param {number} x - Rotation around world space x-axis in degrees.
@@ -1340,7 +1388,7 @@ class GraphNode extends EventHandler {
      */
     /**
      * Sets the world space rotation of the specified graph node using Euler angles. Eulers are
-     * interpreted in XYZ order.
+     * interpreted in XYZ order. Unreal-coordinate nodes use UE Roll (X), Pitch (Y), Yaw (Z).
      *
      * @overload
      * @param {Vec3} angles - Vector holding rotations around world space axes in degrees.
@@ -1355,7 +1403,11 @@ class GraphNode extends EventHandler {
      * @param {number} [z] - Rotation around world space z-axis in degrees.
      */
     setEulerAngles(x, y, z) {
-        this.localRotation.setFromEulerAngles(x, y, z);
+        if (this._coordinateSystem === 'unreal') {
+            unrealEulerToRotation(x instanceof Vec3 ? x : unrealAngles.set(x, y, z), this.localRotation);
+        } else {
+            this.localRotation.setFromEulerAngles(x, y, z);
+        }
 
         if (this._parent !== null) {
             const parentRot = this._parent.getRotation();
@@ -1632,62 +1684,43 @@ class GraphNode extends EventHandler {
     }
 
     /**
-     * Reorients the graph node so that the negative z-axis points towards the target.
+     * Reorients the graph node so its semantic forward axis points toward the target: local -Z in
+     * `legacy` mode and local +X in `unreal` mode. The default world up is respectively +Y or +Z.
      *
-     * The up vector must not be parallel to the direction from the node to the target. When it is —
-     * looking straight up or down with the default up vector, or at the node's own position — the
-     * basis is degenerate and the node's rotation is reset to identity, discarding whatever
-     * rotation it already had, with nothing reported. Pass a different up vector in those cases.
-     *
-     * @overload
-     * @param {number} x - X-component of the world space coordinate to look at.
-     * @param {number} y - Y-component of the world space coordinate to look at.
-     * @param {number} z - Z-component of the world space coordinate to look at.
-     * @param {number} [ux] - X-component of the up vector for the look at transform. Defaults to 0.
-     * @param {number} [uy] - Y-component of the up vector for the look at transform. Defaults to 1.
-     * @param {number} [uz] - Z-component of the up vector for the look at transform. Defaults to 0.
-     * @returns {void}
-     * @example
-     * // Look at the world space origin, using the (default) positive y-axis for up
-     * this.entity.lookAt(0, 0, 0);
-     * @example
-     * // Look at world space coordinate [10, 10, 10], using the negative world y-axis for up
-     * this.entity.lookAt(10, 10, 10, 0, -1, 0);
-     */
-    /**
-     * Reorients the graph node so that the negative z-axis points towards the target.
+     * The up vector must not be parallel to the target direction. In `unreal` mode a degenerate
+     * request leaves the current rotation untouched; pass an alternate up vector at the poles.
      *
      * @overload
-     * @param {Vec3} target - The world space coordinate to look at.
-     * @param {Vec3} [up] - The world space up vector for look at transform. Defaults to {@link Vec3.UP}.
+     * @param {number} x - X-component of the world-space target.
+     * @param {number} y - Y-component of the world-space target.
+     * @param {number} z - Z-component of the world-space target.
+     * @param {number} [ux] - X-component of the up vector. Defaults to 0.
+     * @param {number} [uy] - Y-component of the up vector. Defaults to 1 (legacy) or 0 (unreal).
+     * @param {number} [uz] - Z-component of the up vector. Defaults to 0 (legacy) or 1 (unreal).
      * @returns {void}
-     * @example
-     * // Look at another entity, using the (default) positive y-axis for up
-     * const target = otherEntity.getPosition();
-     * this.entity.lookAt(target);
-     * @example
-     * // Look at another entity, using the negative world y-axis for up
-     * const target = otherEntity.getPosition();
-     * this.entity.lookAt(target, Vec3.DOWN);
      */
     /**
-     * @param {number|Vec3} x - If passing a 3D vector, this is the world space coordinate to look at.
-     * Otherwise, it is the x-component of the world space coordinate to look at.
-     * @param {number|Vec3} [y] - If passing a 3D vector, this is the world space up vector for look at
-     * transform. Otherwise, it is the y-component of the world space coordinate to look at.
-     * @param {number} [z] - Z-component of the world space coordinate to look at.
-     * @param {number} [ux] - X-component of the up vector for the look at transform. Defaults to 0.
-     * @param {number} [uy] - Y-component of the up vector for the look at transform. Defaults to 1.
-     * @param {number} [uz] - Z-component of the up vector for the look at transform. Defaults to 0.
+     * @overload
+     * @param {Vec3} target - World-space target.
+     * @param {Vec3} [up] - World-space up direction.
+     * @returns {void}
      */
-    lookAt(x, y, z, ux = 0, uy = 1, uz = 0) {
+    /**
+     * @param {number|Vec3} x - X coordinate or world-space target vector.
+     * @param {number|Vec3} [y] - Y coordinate or up vector.
+     * @param {number} [z] - Z coordinate.
+     * @param {number} [ux] - Up vector X coordinate.
+     * @param {number} [uy] - Up vector Y coordinate.
+     * @param {number} [uz] - Up vector Z coordinate.
+     */
+    lookAt(x, y, z, ux = 0, uy = this._coordinateSystem === 'unreal' ? 0 : 1, uz = this._coordinateSystem === 'unreal' ? 1 : 0) {
         if (x instanceof Vec3) {
             target.copy(x);
 
             if (y instanceof Vec3) { // vec3, vec3
                 up.copy(y);
             } else { // vec3
-                up.copy(Vec3.UP);
+                up.copy(this._coordinateSystem === 'unreal' ? unrealUp : Vec3.UP);
             }
         } else if (z === undefined) {
             return;
@@ -1696,7 +1729,23 @@ class GraphNode extends EventHandler {
             up.set(ux, uy, uz);
         }
 
-        matrix.setLookAt(this.getPosition(), target, up);
+        if (this._coordinateSystem === 'unreal') {
+            const nodePosition = this.getPosition();
+            lookForward.sub2(target, nodePosition).normalize();
+            lookRight.cross(up, lookForward).normalize();
+            if (lookForward.lengthSq() === 0 || lookRight.lengthSq() === 0) {
+                return;
+            }
+            lookVertical.cross(lookForward, lookRight).normalize();
+            matrix.set([
+                lookForward.x, lookForward.y, lookForward.z, 0,
+                lookRight.x, lookRight.y, lookRight.z, 0,
+                lookVertical.x, lookVertical.y, lookVertical.z, 0,
+                nodePosition.x, nodePosition.y, nodePosition.z, 1
+            ]);
+        } else {
+            matrix.setLookAt(this.getPosition(), target, up);
+        }
         rotation.setFromMat4(matrix);
         this.setRotation(rotation);
     }
@@ -1781,7 +1830,7 @@ class GraphNode extends EventHandler {
 
     /**
      * Rotates the graph node in world space by the specified Euler angles. Eulers are specified in
-     * degrees in XYZ order.
+     * degrees in XYZ order. Unreal-coordinate nodes use UE Roll (X), Pitch (Y), Yaw (Z).
      *
      * @overload
      * @param {number} x - Rotation around world space x-axis in degrees.
@@ -1793,7 +1842,7 @@ class GraphNode extends EventHandler {
      */
     /**
      * Rotates the graph node in world space by the specified Euler angles. Eulers are specified in
-     * degrees in XYZ order.
+     * degrees in XYZ order. Unreal-coordinate nodes use UE Roll (X), Pitch (Y), Yaw (Z).
      *
      * @overload
      * @param {Vec3} rotation - Vector holding world space rotation.
@@ -1808,7 +1857,11 @@ class GraphNode extends EventHandler {
      * @param {number} [z] - Rotation around world space z-axis in degrees.
      */
     rotate(x, y, z) {
-        rotation.setFromEulerAngles(x, y, z);
+        if (this._coordinateSystem === 'unreal') {
+            unrealEulerToRotation(x instanceof Vec3 ? x : unrealAngles.set(x, y, z), rotation);
+        } else {
+            rotation.setFromEulerAngles(x, y, z);
+        }
 
         if (this._parent === null) {
             this.localRotation.mul2(rotation, this.localRotation);
@@ -1828,7 +1881,7 @@ class GraphNode extends EventHandler {
 
     /**
      * Rotates the graph node in local space by the specified Euler angles. Eulers are specified in
-     * degrees in XYZ order.
+     * degrees in XYZ order. Unreal-coordinate nodes use UE Roll (X), Pitch (Y), Yaw (Z).
      *
      * @overload
      * @param {number} x - Rotation around local space x-axis in degrees.
@@ -1840,7 +1893,7 @@ class GraphNode extends EventHandler {
      */
     /**
      * Rotates the graph node in local space by the specified Euler angles. Eulers are specified in
-     * degrees in XYZ order.
+     * degrees in XYZ order. Unreal-coordinate nodes use UE Roll (X), Pitch (Y), Yaw (Z).
      *
      * @overload
      * @param {Vec3} rotation - Vector holding local space rotation.
@@ -1855,7 +1908,11 @@ class GraphNode extends EventHandler {
      * @param {number} [z] - Rotation around local space z-axis in degrees.
      */
     rotateLocal(x, y, z) {
-        rotation.setFromEulerAngles(x, y, z);
+        if (this._coordinateSystem === 'unreal') {
+            unrealEulerToRotation(x instanceof Vec3 ? x : unrealAngles.set(x, y, z), rotation);
+        } else {
+            rotation.setFromEulerAngles(x, y, z);
+        }
 
         this.localRotation.mul(rotation);
 

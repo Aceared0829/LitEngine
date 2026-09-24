@@ -12,6 +12,7 @@ const dir = new Vec3();
 const position = new Vec3();
 
 const rotation = new Quat();
+const unrealBack = new Vec3(-1, 0, 0);
 
 /**
  * The focus controller. It ignores the input frame and instead eases the pose from where it was
@@ -58,8 +59,11 @@ class FocusController extends InputController {
      * @param {boolean} [smooth] - Whether to smooth the transition.
      */
     attach(pose, smooth = true) {
+        for (const internalPose of [this._targetRootPose, this._rootPose, this._targetChildPose, this._childPose, this._pose]) {
+            internalPose.coordinateSystem = pose.coordinateSystem;
+        }
         this._targetRootPose.set(pose.getFocus(dir), pose.angles, 0);
-        this._targetChildPose.position.set(0, 0, pose.distance);
+        this._targetChildPose.position.copy(pose.coordinateSystem === 'unreal' ? unrealBack : Vec3.BACK).mulScalar(pose.distance);
 
         if (!smooth) {
             this._rootPose.copy(this._targetRootPose);
@@ -103,7 +107,7 @@ class FocusController extends InputController {
         );
 
         // calculate final pose
-        rotation.setFromEulerAngles(this._rootPose.angles)
+        this._rootPose.getRotation(rotation)
         .transformVector(this._childPose.position, position)
         .add(this._rootPose.position);
         return this._pose.set(position, this._rootPose.angles, this._childPose.position.length());

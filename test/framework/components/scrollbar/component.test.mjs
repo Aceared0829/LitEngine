@@ -105,6 +105,46 @@ describe('ScrollbarComponent', function () {
             expect(fired).to.equal(0);
         });
 
+        it('moves vertical handles down for top-left Unreal Screen UI', function () {
+            const sampleHandlePosition = (testApp, screenSpace) => {
+                const screen = new Entity('screen', testApp);
+                screen.addComponent('screen', { screenSpace });
+                testApp.root.addChild(screen);
+
+                const handle = new Entity('handle', testApp);
+                handle.addComponent('element', { type: ELEMENTTYPE_IMAGE, height: 20 });
+                const scrollbar = new Entity('scrollbar', testApp);
+                scrollbar.addComponent('element', { type: ELEMENTTYPE_IMAGE, height: 100 });
+                scrollbar.addChild(handle);
+                screen.addChild(scrollbar);
+                scrollbar.addComponent('scrollbar', {
+                    orientation: ORIENTATION_VERTICAL,
+                    value: 0.25,
+                    handleSize: 0.2,
+                    handleEntity: handle
+                });
+
+                const position = scrollbar.scrollbar._getHandlePosition();
+                screen.destroy();
+                return position;
+            };
+
+            const legacyPosition = sampleHandlePosition(app, true);
+            const unrealApp = createApp({ coordinateSystem: 'unreal' });
+            let unrealPosition;
+            let unrealWorldPosition;
+            try {
+                unrealPosition = sampleHandlePosition(unrealApp, true);
+                unrealWorldPosition = sampleHandlePosition(unrealApp, false);
+            } finally {
+                unrealApp.destroy();
+            }
+
+            expect(legacyPosition).to.be.lessThan(0);
+            expect(unrealPosition).to.be.greaterThan(0);
+            expect(unrealWorldPosition).to.be.greaterThan(0);
+        });
+
     });
 
     describe('#handleSize', function () {
