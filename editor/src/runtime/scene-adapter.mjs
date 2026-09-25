@@ -7,6 +7,14 @@ import { Vec3, unrealEulerToRotation, unrealRotationToEuler } from 'playcanvas';
  */
 
 /**
+ * @typedef {object} SceneDuplicate
+ * @property {Entity} entity - Deep-cloned entity hierarchy.
+ * @property {Entity} parent - Original sibling parent used when restoring the entity.
+ * @property {Transform} initialTransform - Transform at the time of duplication.
+ * @property {boolean} enabled - Whether the source entity was enabled before the provisional drag.
+ */
+
+/**
  * Keeps the engine object graph private and publishes only serializable scene data.
  */
 export class SceneAdapter {
@@ -22,6 +30,77 @@ export class SceneAdapter {
      */
     register(entity, id) {
         this.#entities.set(id, entity);
+    }
+
+    /**
+     * Deep-clones a registered entity as a sibling and registers the clone for editing.
+     *
+     * @param {string} id - Source entity identity.
+     * @param {string} duplicateId - Stable identity for the copy.
+     * @param {string} name - Display name for the copy.
+     * @returns {SceneDuplicate | null} Created entity data, or null when the source cannot be copied.
+     */
+    duplicate(id, duplicateId, name) {
+        const source = this.#entities.get(id);
+        const parent = source?.parent;
+        if (!source || !parent || this.#entities.has(duplicateId)) {
+            return null;
+        }
+
+        const enabled = source.enabled;
+        const entity = source.clone();
+        entity.name = name;
+        entity.enabled = false;
+        parent.addChild(entity);
+        this.register(entity, duplicateId);
+
+        const initialTransform = this.getTransform(duplicateId);
+        if (!initialTransform) {
+            this.remove(duplicateId);
+            entity.destroy();
+            return null;
+        }
+        this.setInitialTransform(duplicateId, initialTransform);
+
+        return { entity, parent, initialTransform, enabled };
+    }
+
+    /**
+     * Unregisters and detaches an entity without destroying it, so history can restore it.
+     *
+     * @param {string} id - Entity identity.
+     * @returns {Entity | null} Detached entity, if registered.
+     */
+    remove(id) {
+        const entity = this.#entities.get(id);
+        if (!entity) {
+            return null;
+        }
+
+        entity.parent?.removeChild(entity);
+        this.#entities.delete(id);
+        this.#initialTransforms.delete(id);
+        return entity;
+    }
+
+    /**
+     * Re-registers an entity detached by {@link remove}.
+     *
+     * @param {Entity} entity - Detached entity to restore.
+     * @param {string} id - Stable editor identity.
+     * @param {Entity} parent - Parent recorded when the entity was duplicated.
+     * @param {Transform} initialTransform - Transform used by inspector reset.
+     * @returns {boolean} Whether the entity was restored.
+     */
+    restore(entity, id, parent, initialTransform) {
+        if (this.#entities.has(id)) {
+            return false;
+        }
+
+        parent.addChild(entity);
+        this.register(entity, id);
+        this.setInitialTransform(id, initialTransform);
+        return true;
     }
 
     /**

@@ -89,14 +89,17 @@ export class ViewportTools {
 
     /**
      * @param {Entity | null} entity - Selected entity.
+     * @param {boolean} [attachGizmo] - Whether to retarget the active transform gizmo.
      */
-    select(entity) {
+    select(entity, attachGizmo = true) {
         this.#outlineRenderer.removeAllEntities();
         if (entity) {
             this.#outlineRenderer.addEntity(entity, Color.WHITE);
             this.#cameraControls.setPivot(entity.getPosition());
         }
-        this.#transformController.select(entity);
+        if (attachGizmo) {
+            this.#transformController.select(entity);
+        }
     }
 
     /**

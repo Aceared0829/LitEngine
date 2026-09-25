@@ -11,22 +11,31 @@ export function Toolbar({ state, dispatch, ready, isNavigationActive }) {
     const effectiveSpace = state.activeTool === 'scale' ? 'local' : state.coordinateSpace;
     const stateRef = useRef(state);
     stateRef.current = state;
-
-    const toggleCoordinateSpace = () => {
-        if (stateRef.current.activeTool === 'scale') {
-            return false;
-        }
-        dispatch({
-            type: 'setCoordinateSpace',
-            coordinateSpace: stateRef.current.coordinateSpace === 'world' ? 'local' : 'world'
-        });
-        return true;
-    };
+    const dispatchRef = useRef(dispatch);
+    dispatchRef.current = dispatch;
+    const readyRef = useRef(ready);
+    readyRef.current = ready;
+    const isNavigationActiveRef = useRef(isNavigationActive);
+    isNavigationActiveRef.current = isNavigationActive;
 
     useEffect(() => {
+        const activeMousePointers = new Set();
+        const onPointerDown = (event) => {
+            if (event.pointerType === 'mouse') {
+                activeMousePointers.add(event.pointerId);
+            }
+        };
+        const onPointerEnd = event => activeMousePointers.delete(event.pointerId);
+        const onWindowBlur = () => activeMousePointers.clear();
+
         /** @param {KeyboardEvent} event - Keyboard event. */
         const onKeyDown = (event) => {
             if (event.isComposing || isEditableTarget(event.target)) {
+                return;
+            }
+
+            if (event.key === 'Alt') {
+                event.preventDefault();
                 return;
             }
 
@@ -34,21 +43,28 @@ export function Toolbar({ state, dispatch, ready, isNavigationActive }) {
             const hasMeta = event.ctrlKey || event.metaKey;
             if (hasMeta && key === 'z') {
                 event.preventDefault();
-                dispatch(event.shiftKey ? { type: 'redo' } : { type: 'undo' });
+                dispatchRef.current(event.shiftKey ? { type: 'redo' } : { type: 'undo' });
                 return;
             }
             if (hasMeta && key === 'y') {
                 event.preventDefault();
-                dispatch({ type: 'redo' });
+                dispatchRef.current({ type: 'redo' });
                 return;
             }
-            if (!ready || hasMeta || event.altKey || isNavigationActive()) {
+            const isToolShortcut = ['w', 'e', 'r', '1', '2', '3'].includes(key);
+            // Alt may still be held after the mouse is released to finish an Alt-drag duplicate.
+            const altBlocksShortcut = event.altKey && (!isToolShortcut || activeMousePointers.size > 0);
+            if (!readyRef.current || hasMeta || altBlocksShortcut || isNavigationActiveRef.current()) {
                 return;
             }
 
             if (key === 'x' || key === '`' || key === '~' || event.code === 'Backquote') {
-                if (toggleCoordinateSpace()) {
+                if (stateRef.current.activeTool !== 'scale') {
                     event.preventDefault();
+                    dispatchRef.current({
+                        type: 'setCoordinateSpace',
+                        coordinateSpace: stateRef.current.coordinateSpace === 'world' ? 'local' : 'world'
+                    });
                 }
                 return;
             }
@@ -56,37 +72,59 @@ export function Toolbar({ state, dispatch, ready, isNavigationActive }) {
             switch (key) {
                 case 'q':
                     event.preventDefault();
-                    dispatch({ type: 'setTransformTool', tool: 'select' });
+                    dispatchRef.current({ type: 'setTransformTool', tool: 'select' });
                     break;
                 case 'w':
                 case '1':
                     event.preventDefault();
-                    dispatch({ type: 'setTransformTool', tool: 'translate' });
+                    dispatchRef.current({ type: 'setTransformTool', tool: 'translate' });
                     break;
                 case 'e':
                 case '2':
                     event.preventDefault();
-                    dispatch({ type: 'setTransformTool', tool: 'rotate' });
+                    dispatchRef.current({ type: 'setTransformTool', tool: 'rotate' });
                     break;
                 case 'r':
                 case '3':
                     event.preventDefault();
-                    dispatch({ type: 'setTransformTool', tool: 'scale' });
+                    dispatchRef.current({ type: 'setTransformTool', tool: 'scale' });
                     break;
                 case 'f':
                     event.preventDefault();
-                    dispatch(event.shiftKey ? { type: 'frameAll' } : { type: 'focusSelected' });
+                    dispatchRef.current(event.shiftKey ? { type: 'frameAll' } : { type: 'focusSelected' });
                     break;
                 case 'escape':
                     event.preventDefault();
-                    dispatch({ type: 'selectEntity', entityId: null });
+                    dispatchRef.current({ type: 'selectEntity', entityId: null });
                     break;
             }
         };
 
+        /** @param {KeyboardEvent} event - Keyboard event. */
+        const onKeyUp = (event) => {
+            if (event.key !== 'Alt' || isEditableTarget(event.target)) {
+                return;
+            }
+
+            event.preventDefault();
+            document.querySelector('.viewport-canvas')?.focus({ preventScroll: true });
+        };
+
         window.addEventListener('keydown', onKeyDown);
-        return () => window.removeEventListener('keydown', onKeyDown);
-    }, [dispatch, ready, isNavigationActive]);
+        window.addEventListener('keyup', onKeyUp);
+        window.addEventListener('pointerdown', onPointerDown, true);
+        window.addEventListener('pointerup', onPointerEnd, true);
+        window.addEventListener('pointercancel', onPointerEnd, true);
+        window.addEventListener('blur', onWindowBlur);
+        return () => {
+            window.removeEventListener('keydown', onKeyDown);
+            window.removeEventListener('keyup', onKeyUp);
+            window.removeEventListener('pointerdown', onPointerDown, true);
+            window.removeEventListener('pointerup', onPointerEnd, true);
+            window.removeEventListener('pointercancel', onPointerEnd, true);
+            window.removeEventListener('blur', onWindowBlur);
+        };
+    }, []);
 
     const toolButton = (tool, label, shortcut, title) => jsx(Button, {
         class: ['toolbar-button', 'toolbar-tool', ...(state.activeTool === tool ? ['toolbar-button-active'] : [])],
@@ -129,7 +167,10 @@ export function Toolbar({ state, dispatch, ready, isNavigationActive }) {
             text: effectiveSpace === 'world' ? 'World' : 'Local',
             tooltip: state.activeTool === 'scale' ? 'Scale uses local space' : 'Toggle world/local transform space (~ / X)',
             disabled: !ready || state.activeTool === 'scale',
-            onClick: toggleCoordinateSpace
+            onClick: () => dispatch({
+                type: 'setCoordinateSpace',
+                coordinateSpace: stateRef.current.coordinateSpace === 'world' ? 'local' : 'world'
+            })
         }),
         jsx(Button, {
             class: ['toolbar-button', 'snap-button', ...(state.snap.enabled ? ['toolbar-button-active'] : [])],
