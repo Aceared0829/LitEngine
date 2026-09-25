@@ -26,6 +26,17 @@ import { ViewportTools } from './viewport-tools.mjs';
  */
 
 /**
+ * @typedef {object} DuplicateTransformContext
+ * @property {string} entityId - Copy identity.
+ * @property {string} sourceEntityId - Source identity selected before duplication.
+ * @property {Entity} entity - Cloned entity retained by history.
+ * @property {Entity} parent - Parent used to restore the clone on redo.
+ * @property {Transform} initialTransform - Transform at the beginning of the drag.
+ * @property {boolean} enabled - Whether the source entity was enabled.
+ * @property {boolean} published - Whether the provisional copy is visible to the editor UI.
+ */
+
+/**
  * Sole PlayCanvas owner for the editor. It realizes commands using private engine objects,
  * then communicates observations as plain data.
  */
@@ -48,7 +59,15 @@ export class EditorRuntime {
     /** @type {{ entityId: string, gestureId: number, before: Transform } | null} */
     #transformDrag = null;
 
+    /** @type {DuplicateTransformContext | null} */
+    #duplicateTransform = null;
+
     #lastGestureId = 0;
+
+    #nextDuplicateId = 0;
+
+    /** @type {Set<string>} */
+    #duplicateEntityIds = new Set();
 
     /** @type {TransformController | null} */
     #transformController = null;
@@ -125,8 +144,18 @@ export class EditorRuntime {
                     }
                     this.#viewportTools?.setCameraControlEnabled(!active);
                 },
-                transform => this.#emitTransformPreview(transform),
-                (before, after, label) => this.#commitTransform(this.#selectedEntityId, before, after, label)
+                (transform) => {
+                    this.#publishDuplicateTransform();
+                    this.#emitTransformPreview(transform);
+                },
+                (before, after, label, duplicate) => {
+                    if (duplicate) {
+                        return this.#commitDuplicateTransform(before, after, label);
+                    }
+                    this.#commitTransform(this.#selectedEntityId, before, after, label);
+                },
+                () => this.#beginDuplicateTransform(),
+                () => this.#cancelDuplicateTransform()
             );
             this.#viewportTools = new ViewportTools(
                 app,
@@ -180,6 +209,7 @@ export class EditorRuntime {
     dispatch(command) {
         switch (command.type) {
             case 'selectEntity':
+                this.#transformController?.cancelActiveGesture();
                 this.#cancelTransformDrag();
                 this.#selectionController?.invalidatePendingSelection();
                 this.#selectById(command.entityId);
@@ -225,10 +255,12 @@ export class EditorRuntime {
                 this.#emitSnap();
                 break;
             case 'undo':
+                this.#transformController?.cancelActiveGesture();
                 this.#cancelTransformDrag();
                 this.#undo();
                 break;
             case 'redo':
+                this.#transformController?.cancelActiveGesture();
                 this.#cancelTransformDrag();
                 this.#redo();
                 break;
@@ -343,6 +375,133 @@ export class EditorRuntime {
         this.#selectedEntityId = entityId;
         this.#emit({ type: 'selectionChanged', entityId });
         this.#emit({ type: 'statusChanged', message: entityId ? `Selected ${this.#scene.getEntity(entityId)?.name ?? 'Entity'}` : 'Selection cleared' });
+    }
+
+    /**
+     * Creates a provisional copy for an Alt-drag gesture and makes it the active selection.
+     *
+     * @returns {Entity | null} The copy to attach to the active transform gizmo.
+     */
+    #beginDuplicateTransform() {
+        const sourceEntityId = this.#selectedEntityId;
+        const source = this.#scene.getEntity(sourceEntityId);
+        if (!source || this.#duplicateTransform) {
+            return null;
+        }
+
+        const scene = this.#scene.snapshot();
+        const names = new Set(scene.entities.map(entity => entity.name));
+        const baseName = `${source.name} Copy`;
+        let name = baseName;
+        let suffix = 2;
+        while (names.has(name)) {
+            name = `${baseName} ${suffix++}`;
+        }
+
+        let entityId;
+        do {
+            entityId = `${sourceEntityId}-copy-${++this.#nextDuplicateId}`;
+        } while (this.#scene.getEntity(entityId));
+
+        const duplicate = this.#scene.duplicate(sourceEntityId, entityId, name);
+        if (!duplicate) {
+            return null;
+        }
+
+        this.#duplicateTransform = {
+            entityId,
+            sourceEntityId,
+            entity: duplicate.entity,
+            parent: duplicate.parent,
+            initialTransform: duplicate.initialTransform,
+            enabled: duplicate.enabled,
+            published: false
+        };
+        this.#duplicateEntityIds.add(entityId);
+        this.#initialTransforms.set(entityId, duplicate.initialTransform);
+        this.#selectedEntityId = entityId;
+        return duplicate.entity;
+    }
+
+    /**
+     * Publishes a provisional copy only after the gizmo reports a real transform movement.
+     */
+    #publishDuplicateTransform() {
+        const duplicate = this.#duplicateTransform;
+        if (!duplicate || duplicate.published) {
+            return;
+        }
+
+        duplicate.entity.enabled = duplicate.enabled;
+        duplicate.published = true;
+        this.#viewportTools?.select(duplicate.entity, false);
+        this.#emit({ type: 'sceneChanged', scene: this.#scene.snapshot() });
+        this.#emit({ type: 'selectionChanged', entityId: duplicate.entityId });
+        this.#emit({ type: 'statusChanged', message: `Selected ${duplicate.entity.name}` });
+    }
+
+    /**
+     * Removes an uncommitted copy and restores the source selection.
+     *
+     * @returns {Entity | null} Source entity to reattach to the active gizmo.
+     */
+    #cancelDuplicateTransform() {
+        const duplicate = this.#duplicateTransform;
+        if (!duplicate) {
+            return null;
+        }
+
+        this.#duplicateTransform = null;
+        const entity = this.#scene.remove(duplicate.entityId);
+        this.#initialTransforms.delete(duplicate.entityId);
+        this.#duplicateEntityIds.delete(duplicate.entityId);
+        entity?.destroy();
+        const source = this.#scene.getEntity(duplicate.sourceEntityId);
+        this.#selectedEntityId = duplicate.sourceEntityId;
+        if (duplicate.published) {
+            this.#viewportTools?.select(source, false);
+            this.#emit({ type: 'sceneChanged', scene: this.#scene.snapshot() });
+            this.#emit({ type: 'selectionChanged', entityId: duplicate.sourceEntityId });
+            this.#emit({ type: 'statusChanged', message: `Selected ${source?.name ?? 'Entity'}` });
+        }
+        return source;
+    }
+
+    /**
+     * Commits a successful copy-and-transform as one undoable operation.
+     *
+     * @param {Transform} before - Copy transform at drag start.
+     * @param {Transform} after - Copy transform at drag end.
+     * @param {string} label - History label.
+     * @returns {boolean} Whether the duplicate was committed.
+     */
+    #commitDuplicateTransform(before, after, label) {
+        const duplicate = this.#duplicateTransform;
+        if (!duplicate) {
+            return false;
+        }
+
+        this.#publishDuplicateTransform();
+        const committed = this.#history.commit({
+            type: 'duplicate',
+            entityId: duplicate.entityId,
+            sourceEntityId: duplicate.sourceEntityId,
+            entity: duplicate.entity,
+            parent: duplicate.parent,
+            initialTransform: duplicate.initialTransform,
+            before,
+            after,
+            label
+        });
+        if (!committed) {
+            return false;
+        }
+
+        this.#duplicateTransform = null;
+        this.#emit({ type: 'sceneChanged', scene: this.#scene.snapshot() });
+        this.#emitHistory();
+        this.#emit({ type: 'statusChanged', message: label });
+        return true;
     }
 
     /**
@@ -490,9 +649,19 @@ export class EditorRuntime {
         if (!entry) {
             return;
         }
-        const transform = this.#scene.setTransform(entry.entityId, entry.before);
-        if (transform) {
-            this.#emit({ type: 'transformChanged', entityId: entry.entityId, transform });
+
+        if (entry.type === 'duplicate') {
+            const entity = this.#scene.remove(entry.entityId);
+            if (entity) {
+                this.#initialTransforms.delete(entry.entityId);
+                this.#emit({ type: 'sceneChanged', scene: this.#scene.snapshot() });
+                this.#selectById(entry.sourceEntityId);
+            }
+        } else {
+            const transform = this.#scene.setTransform(entry.entityId, entry.before);
+            if (transform) {
+                this.#emit({ type: 'transformChanged', entityId: entry.entityId, transform });
+            }
         }
         this.#emitHistory();
         this.#emit({ type: 'statusChanged', message: `Undo ${entry.label}` });
@@ -503,9 +672,19 @@ export class EditorRuntime {
         if (!entry) {
             return;
         }
-        const transform = this.#scene.setTransform(entry.entityId, entry.after);
-        if (transform) {
-            this.#emit({ type: 'transformChanged', entityId: entry.entityId, transform });
+
+        if (entry.type === 'duplicate') {
+            if (this.#scene.restore(entry.entity, entry.entityId, entry.parent, entry.initialTransform)) {
+                this.#initialTransforms.set(entry.entityId, entry.initialTransform);
+                this.#scene.setTransform(entry.entityId, entry.after);
+                this.#emit({ type: 'sceneChanged', scene: this.#scene.snapshot() });
+                this.#selectById(entry.entityId);
+            }
+        } else {
+            const transform = this.#scene.setTransform(entry.entityId, entry.after);
+            if (transform) {
+                this.#emit({ type: 'transformChanged', entityId: entry.entityId, transform });
+            }
         }
         this.#emitHistory();
         this.#emit({ type: 'statusChanged', message: `Redo ${entry.label}` });
@@ -550,12 +729,19 @@ export class EditorRuntime {
     }
 
     #resetScene() {
+        this.#transformController?.cancelActiveGesture();
         this.#cancelTransformDrag();
         this.#selectionController?.invalidatePendingSelection();
+        this.#history.clear();
+        for (const entityId of this.#duplicateEntityIds) {
+            const entity = this.#scene.remove(entityId);
+            entity?.destroy();
+            this.#initialTransforms.delete(entityId);
+        }
+        this.#duplicateEntityIds.clear();
         for (const [id, transform] of this.#initialTransforms) {
             this.#scene.setTransform(id, transform);
         }
-        this.#history.clear();
         this.#emit({ type: 'sceneChanged', scene: this.#scene.snapshot() });
         this.#emitHistory();
         this.#selectById('box');
@@ -563,6 +749,7 @@ export class EditorRuntime {
     }
 
     destroy() {
+        this.#transformController?.cancelActiveGesture();
         this.#cancelTransformDrag();
         this.#destroyed = true;
         this.#selectionController?.destroy();

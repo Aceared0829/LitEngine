@@ -143,8 +143,8 @@ test('Inspector and toolbar maintain current state through real React DOM events
     state = { ...state, coordinateSpace: 'world', activeTool: 'translate' };
     await renderToolbar();
 
-    const dispatchKey = (init, target = window) => {
-        const event = new dom.window.KeyboardEvent('keydown', { cancelable: true, bubbles: true, ...init });
+    const dispatchKey = (init, target = window, type = 'keydown') => {
+        const event = new dom.window.KeyboardEvent(type, { cancelable: true, bubbles: true, ...init });
         target.dispatchEvent(event);
         return event;
     };
@@ -202,6 +202,56 @@ test('Inspector and toolbar maintain current state through real React DOM events
     await renderNavToolbar();
     dispatchKey({ key: '~', code: 'Backquote' });
     assert.equal(commands.at(-1).coordinateSpace, 'local');
+
+    const dispatchPointer = (type, pointerId = 41) => {
+        const event = new dom.window.Event(type, { cancelable: true, bubbles: true });
+        Object.defineProperties(event, {
+            pointerId: { configurable: true, value: pointerId },
+            pointerType: { configurable: true, value: 'mouse' }
+        });
+        window.dispatchEvent(event);
+    };
+    state = { ...state, activeTool: 'translate' };
+    await renderToolbar();
+    const focusCanvas = document.createElement('canvas');
+    focusCanvas.className = 'viewport-canvas';
+    focusCanvas.tabIndex = 0;
+    document.body.appendChild(focusCanvas);
+    const altDown = dispatchKey({ key: 'Alt', altKey: true });
+    assert.equal(altDown.defaultPrevented, true, 'Alt does not transfer keyboard focus to the native menu');
+    const commandCountBeforeHeldDrag = commands.length;
+    dispatchPointer('pointerdown');
+    dispatchKey({ key: 'w', altKey: true });
+    assert.equal(commands.length, commandCountBeforeHeldDrag, 'tool shortcuts stay blocked during an active pointer gesture');
+    dispatchPointer('pointerup');
+    const altUp = dispatchKey({ key: 'Alt', altKey: false }, window, 'keyup');
+    assert.equal(altUp.defaultPrevented, true);
+    assert.equal(document.activeElement, focusCanvas, 'releasing Alt returns keyboard focus to the viewport');
+
+    // Q/W/E/R work immediately after Alt is released, even after repeated UI updates.
+    const assertToolShortcut = async (key, tool, altKey = false) => {
+        state = { ...state };
+        await renderToolbar();
+        state = { ...state };
+        await renderToolbar();
+        state = { ...state };
+        await renderToolbar();
+        const event = dispatchKey({ key, altKey });
+        assert.equal(event.defaultPrevented, true);
+        assert.deepEqual(commands.at(-1), { type: 'setTransformTool', tool });
+        state = { ...state, activeTool: tool };
+        await renderToolbar();
+    };
+    await assertToolShortcut('q', 'select');
+    await assertToolShortcut('w', 'translate');
+    await assertToolShortcut('e', 'rotate');
+    await assertToolShortcut('r', 'scale');
+
+    // Alt can remain held after mouse release during duplication and W/E/R still switch tools.
+    await assertToolShortcut('w', 'translate', true);
+    await assertToolShortcut('e', 'rotate', true);
+    await assertToolShortcut('r', 'scale', true);
+    focusCanvas.remove();
 
     // Ignored when typing in an editable input target
     const input = document.createElement('input');

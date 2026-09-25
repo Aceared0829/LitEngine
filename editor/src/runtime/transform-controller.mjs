@@ -29,8 +29,14 @@ export class TransformController {
     /** @type {(transform: Transform) => void} */
     #onTransformChange;
 
-    /** @type {(before: Transform, after: Transform, label: string) => void} */
+    /** @type {(before: Transform, after: Transform, label: string, duplicate: boolean) => boolean | void} */
     #onTransformCommit;
+
+    /** @type {() => Entity | null} */
+    #onDuplicateStart;
+
+    /** @type {() => Entity | null} */
+    #onDuplicateCancel;
 
     /** @type {Transform | null} */
     #transformStart = null;
@@ -41,12 +47,38 @@ export class TransformController {
 
     #navigationGesture = false;
 
+    #duplicateGesture = false;
+
+    #duplicateActive = false;
+
+    #suppressCommit = false;
+
     #onPointerDown = (event) => {
         if (event.pointerType !== 'mouse') {
             return;
         }
         this.#pointerId = event.pointerId;
+        this.#duplicateGesture = false;
+        this.#duplicateActive = false;
         this.#navigationGesture = event.altKey || event.buttons !== 1;
+
+        const canDuplicate = event.altKey && event.button === 0 && event.buttons === 1 &&
+            (this.#tool === 'translate' || this.#tool === 'rotate') && this.#entity && this.gizmo;
+        const hit = canDuplicate && this.#gizmoHitTest(event.offsetX, event.offsetY);
+        if (hit) {
+            this.#onPointerActivity(true);
+            this.#duplicateGesture = true;
+            const duplicate = this.#onDuplicateStart();
+            if (duplicate) {
+                this.#entity = duplicate;
+                this.gizmo?.attach([duplicate]);
+                this.#navigationGesture = false;
+            } else {
+                this.#duplicateGesture = false;
+                this.#onPointerActivity(false);
+            }
+        }
+
         if (this.gizmo) {
             this.gizmo.mouseButtons[0] = !this.#navigationGesture;
         }
@@ -59,7 +91,7 @@ export class TransformController {
         if (this.#pointerId === null) {
             return;
         }
-        if (event.buttons !== 1 || event.altKey) {
+        if (event.buttons !== 1 || (event.altKey && !this.#duplicateGesture)) {
             this.#navigationGesture = true;
             if (this.#transformStart) {
                 this.gizmo?.detach();
@@ -76,6 +108,9 @@ export class TransformController {
     };
 
     #onCancel = () => {
+        if (this.#cancelDuplicateGesture()) {
+            return;
+        }
         if (this.#transformStart) {
             this.gizmo?.detach();
             this.#attach();
@@ -99,13 +134,17 @@ export class TransformController {
      * @param {CameraComponent} camera - Viewport camera component.
      * @param {(active: boolean) => void} onPointerActivity - Reports real gizmo pointer capture.
      * @param {(transform: Transform) => void} onTransformChange - Reports transform previews.
-     * @param {(before: Transform, after: Transform, label: string) => void} onTransformCommit - Reports committed gizmo drag.
+     * @param {(before: Transform, after: Transform, label: string, duplicate: boolean) => boolean | void} onTransformCommit - Reports committed gizmo drag and duplicate success.
+     * @param {() => Entity | null} onDuplicateStart - Creates and selects a provisional duplicate.
+     * @param {() => Entity | null} onDuplicateCancel - Removes a provisional duplicate and returns the source entity.
      */
-    constructor(camera, onPointerActivity, onTransformChange, onTransformCommit) {
+    constructor(camera, onPointerActivity, onTransformChange, onTransformCommit, onDuplicateStart, onDuplicateCancel) {
         const layer = Gizmo.createLayer(camera.system.app);
         this.#onPointerActivity = onPointerActivity;
         this.#onTransformChange = onTransformChange;
         this.#onTransformCommit = onTransformCommit;
+        this.#onDuplicateStart = onDuplicateStart;
+        this.#onDuplicateCancel = onDuplicateCancel;
         this.#gizmos = {
             translate: new TranslateGizmo(camera, layer),
             rotate: new RotateGizmo(camera, layer),
@@ -121,6 +160,7 @@ export class TransformController {
             gizmo.on('pointer:up', () => this.#onPointerActivity(false));
             gizmo.on('transform:start', () => {
                 this.#transformStart = this.#getTransform();
+                this.#duplicateActive = this.#duplicateGesture;
             });
             gizmo.on('transform:move', () => this.#notifyTransform());
             gizmo.on('transform:end', () => this.#commitTransform());
@@ -144,6 +184,7 @@ export class TransformController {
             return;
         }
 
+        this.#cancelDuplicateGesture();
         this.gizmo?.detach();
         this.#tool = tool;
         this.#applySnap();
@@ -211,10 +252,61 @@ export class TransformController {
         return this.#tool === 'select' ? null : this.#gizmos[this.#tool];
     }
 
+    /**
+     * Cancels a provisional duplicate gesture, if one is in progress.
+     */
+    cancelActiveGesture() {
+        this.#cancelDuplicateGesture();
+    }
+
     #attach() {
         if (this.#entity && this.gizmo) {
             this.gizmo.attach([this.#entity]);
         }
+    }
+
+    /**
+     * Checks the active gizmo before its pointer handler starts recording drag state.
+     *
+     * @param {number} x - Canvas-local pointer X.
+     * @param {number} y - Canvas-local pointer Y.
+     * @returns {boolean} Whether a transform handle was hit.
+     */
+    #gizmoHitTest(x, y) {
+        const gizmo = this.gizmo;
+        return Boolean(gizmo?._getSelection(x, y).length);
+    }
+
+    /**
+     * Rolls back a provisional duplicate and resets pointer ownership.
+     *
+     * @returns {boolean} Whether a duplicate gesture was canceled.
+     */
+    #cancelDuplicateGesture() {
+        if (!this.#duplicateGesture) {
+            return false;
+        }
+
+        this.#suppressCommit = true;
+        this.#transformStart = null;
+        this.#duplicateActive = false;
+        this.#duplicateGesture = false;
+        this.gizmo?.detach();
+        let source = null;
+        try {
+            source = this.#onDuplicateCancel();
+        } finally {
+            this.#entity = source;
+            this.#attach();
+            this.#suppressCommit = false;
+        }
+        this.#pointerId = null;
+        this.#navigationGesture = false;
+        if (this.gizmo) {
+            this.gizmo.mouseButtons[0] = true;
+        }
+        this.#onPointerActivity(false);
+        return true;
     }
 
     #applySnap() {
@@ -234,12 +326,49 @@ export class TransformController {
     #commitTransform() {
         const before = this.#transformStart;
         const after = this.#getTransform();
+        const duplicate = this.#duplicateActive;
         this.#transformStart = null;
+        this.#duplicateActive = false;
         this.#onPointerActivity(false);
-        if (before && after) {
-            const label = `${this.#tool === 'translate' ? 'Move' : this.#tool === 'rotate' ? 'Rotate' : 'Scale'} ${this.#entity?.name ?? 'Entity'}`;
-            this.#onTransformCommit(before, after, label);
+        if (this.#suppressCommit) {
+            return;
         }
+
+        if (duplicate && (!before || !after || this.#sameTransform(before, after))) {
+            this.#duplicateGesture = false;
+            const source = this.#onDuplicateCancel();
+            if (source) {
+                this.#entity = source;
+                this.gizmo?.attach([source]);
+            }
+            return;
+        }
+
+        if (before && after) {
+            const operation = this.#tool === 'translate' ? 'Move' : this.#tool === 'rotate' ? 'Rotate' : 'Scale';
+            const prefix = duplicate ? 'Duplicate ' : '';
+            const label = `${prefix}${operation} ${this.#entity?.name ?? 'Entity'}`;
+            const committed = this.#onTransformCommit(before, after, label, duplicate);
+            if (duplicate && committed === false) {
+                const source = this.#onDuplicateCancel();
+                if (source) {
+                    this.#entity = source;
+                    this.gizmo?.attach([source]);
+                }
+            }
+        }
+        this.#duplicateGesture = false;
+    }
+
+    /**
+     * @param {Transform} first - Original transform.
+     * @param {Transform} second - Candidate transform.
+     * @returns {boolean} Whether both transforms are equal.
+     */
+    #sameTransform(first, second) {
+        return ['position', 'rotation', 'scale'].every((field) => {
+            return first[field].every((value, index) => value === second[field][index]);
+        });
     }
 
     /**
