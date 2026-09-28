@@ -120,6 +120,17 @@ const removeFromNode = (node, id) => {
 export const normalizeWorkspaceLayout = (value, availableWidth = 1440, availableHeight = 830) => {
     const candidate = value && typeof value === 'object' ? value : DEFAULT_LAYOUT;
     const seen = new Set();
+    const surfaceIds = new Set();
+    const uniqueSurfaceId = (value, fallback) => {
+        const base = typeof value === 'string' && value ? value : fallback;
+        let id = base;
+        let suffix = 2;
+        while (surfaceIds.has(id)) {
+            id = `${base}-${suffix++}`;
+        }
+        surfaceIds.add(id);
+        return id;
+    };
     let root = normalizeNode(candidate.root, seen);
     let floats = [];
     if (Array.isArray(candidate.floats)) {
@@ -131,7 +142,7 @@ export const normalizeWorkspaceLayout = (value, availableWidth = 1440, available
             const width = clampDockWidth(item.width, 240, Math.max(240, availableWidth - 16));
             const height = clampDockWidth(item.height, 180, Math.max(180, availableHeight - 16));
             floats.push({
-                id: typeof item.id === 'string' ? item.id : `float-${floats.length}`,
+                id: uniqueSurfaceId(item.id, `float-${floats.length}`),
                 root: floatRoot,
                 x: clampDockWidth(item.x, 0, Math.max(0, availableWidth - width)),
                 y: clampDockWidth(item.y, 0, Math.max(0, availableHeight - height)),
@@ -155,7 +166,7 @@ export const normalizeWorkspaceLayout = (value, availableWidth = 1440, available
                 continue;
             }
             externalGroups.push({
-                id: typeof item.id === 'string' ? item.id : `external-${externalGroups.length}`,
+                id: uniqueSurfaceId(item.id, `external-${externalGroups.length}`),
                 root: groupRoot,
                 x: Number.isFinite(item.x) ? item.x : 80,
                 y: Number.isFinite(item.y) ? item.y : 70,
@@ -244,9 +255,16 @@ export const floatPanel = (layout, id, geometry = {}) => {
         return { ...layout, floats: [...layout.floats.filter(item => item !== existing), { ...existing, ...geometry }] };
     }
     const detached = detachPanel(layout, id);
+    const baseId = `float-${id}`;
+    const occupiedIds = new Set([...detached.floats, ...detached.externalGroups].map(item => item.id));
+    let floatId = baseId;
+    let suffix = 2;
+    while (occupiedIds.has(floatId)) {
+        floatId = `${baseId}-${suffix++}`;
+    }
     return {
         ...detached,
-        floats: [...detached.floats, { id: `float-${id}`, root: tabs(id), x: geometry.x ?? 80, y: geometry.y ?? 70, width: geometry.width ?? 340, height: geometry.height ?? 420, minimized: false, maximized: false }]
+        floats: [...detached.floats, { id: floatId, root: tabs(id), x: geometry.x ?? 80, y: geometry.y ?? 70, width: geometry.width ?? 340, height: geometry.height ?? 420, minimized: false, maximized: false }]
     };
 };
 

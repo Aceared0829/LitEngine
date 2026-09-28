@@ -79,6 +79,32 @@ test('floating window states survive normalization and closing hides every tool 
     assert.equal(containsPanel(closed.root, 'viewport'), true);
 });
 
+test('splitting a floating group assigns each floating surface a distinct identity', () => {
+    const initial = normalizeWorkspaceLayout(DEFAULT_LAYOUT);
+    const grouped = dockPanel(floatPanel(initial, 'hierarchy'), 'inspector', 'hierarchy', 'right');
+    const separated = floatPanel(grouped, 'hierarchy');
+    assert.deepEqual(separated.floats.map(item => item.id), ['float-hierarchy', 'float-hierarchy-2']);
+    assert.ok(containsPanel(separated.floats[0].root, 'inspector'));
+    assert.ok(containsPanel(separated.floats[1].root, 'hierarchy'));
+
+    const external = externalizeFloatingWindow(separated, 'float-hierarchy-2', { screenX: 100, screenY: 100 });
+    assert.equal(external.floats.length, 1);
+    assert.equal(external.floats[0].id, 'float-hierarchy');
+    assert.equal(external.externalGroups[0].id, 'float-hierarchy-2');
+});
+
+test('normalization repairs duplicate floating surface identities from saved layouts', () => {
+    const layout = normalizeWorkspaceLayout({
+        root: { type: 'tabs', ids: ['viewport'], active: 'viewport' },
+        floats: [
+            { id: 'shared', root: { type: 'tabs', ids: ['hierarchy'], active: 'hierarchy' }, x: 0, y: 0, width: 340, height: 420 },
+            { id: 'shared', root: { type: 'tabs', ids: ['inspector'], active: 'inspector' }, x: 0, y: 0, width: 340, height: 420 }
+        ],
+        externalGroups: []
+    });
+    assert.deepEqual(layout.floats.map(item => item.id), ['shared', 'shared-2']);
+});
+
 test('a complete floating group leaves for a native window and returns intact', () => {
     const initial = normalizeWorkspaceLayout(DEFAULT_LAYOUT, 1200, 800);
     const floating = floatPanel(initial, 'hierarchy', { x: 150, y: 100, width: 600, height: 450 });
