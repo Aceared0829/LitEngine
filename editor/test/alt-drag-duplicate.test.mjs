@@ -93,7 +93,7 @@ test('Alt+Move duplicates the selected entity, leaves the source still, and undo
     runtime.dispatch({ type: 'setTransformTool', tool: 'translate' });
 
     pointer('pointerdown');
-    const duplicate = findEntity(app(), 'Box Copy');
+    const duplicate = findEntity(app(), 'Box 1');
     assert.ok(duplicate, 'the copy is created as soon as an eligible gizmo drag starts');
     assert.equal(duplicate.enabled, false, 'the provisional copy stays hidden until it actually moves');
     assert.equal(events.filter(event => event.type === 'sceneChanged').length, sceneEventCount);
@@ -113,16 +113,16 @@ test('Alt+Move duplicates the selected entity, leaves the source still, and undo
 
     const duplicateId = events.filter(event => event.type === 'selectionChanged').at(-1).entityId;
     const committedScene = events.filter(event => event.type === 'sceneChanged').at(-1).scene;
-    assert.equal(committedScene.entities.some(entity => entity.id === duplicateId && entity.name === 'Box Copy'), true);
-    assert.equal(events.filter(event => event.type === 'historyChanged').at(-1).history.undoLabel, 'Duplicate Move Box Copy');
+    assert.equal(committedScene.entities.some(entity => entity.id === duplicateId && entity.name === 'Box 1'), true);
+    assert.equal(events.filter(event => event.type === 'historyChanged').at(-1).history.undoLabel, 'Duplicate Move Box 1');
 
     runtime.dispatch({ type: 'undo' });
-    assert.equal(findEntity(app(), 'Box Copy'), null);
+    assert.equal(findEntity(app(), 'Box 1'), null);
     assert.deepEqual(source.getPosition().toArray(), sourcePosition);
     assert.equal(events.filter(event => event.type === 'selectionChanged').at(-1).entityId, 'box');
 
     runtime.dispatch({ type: 'redo' });
-    const restored = findEntity(app(), 'Box Copy');
+    const restored = findEntity(app(), 'Box 1');
     assert.equal(restored, duplicate, 'redo restores the same cloned runtime entity');
     assert.deepEqual(restored.getPosition().toArray(), movedPosition);
     assert.equal(events.filter(event => event.type === 'selectionChanged').at(-1).entityId, duplicateId);
@@ -136,13 +136,57 @@ test('Alt+Rotate applies rotation to the copy and preserves the source rotation'
     runtime.dispatch({ type: 'setTransformTool', tool: 'rotate' });
 
     pointer('pointerdown');
-    const duplicate = findEntity(app(), 'Box Copy');
+    const duplicate = findEntity(app(), 'Box 1');
     pointer('pointermove', { x: 420, y: 300 });
     pointer('pointerup', { buttons: 0 });
     pointer('mouseup', { buttons: 0 });
 
     assert.notEqual(Math.abs(duplicate.getLocalRotation().dot(sourceRotation)), 1);
     assert.ok(Math.abs(Math.abs(source.getLocalRotation().dot(sourceRotation)) - 1) < 1e-6);
+});
+
+test('copies use increasing numeric names even when copying a copy or reusing an undone name', async (t) => {
+    const { app, events, pointer, runtime } = await createRuntimeHarness(t);
+    runtime.dispatch({ type: 'setTransformTool', tool: 'translate' });
+    const duplicate = () => {
+        pointer('pointerdown');
+        pointer('pointermove', { x: 420, y: 300 });
+        pointer('pointerup', { buttons: 0 });
+        pointer('mouseup', { buttons: 0 });
+        return events.filter(event => event.type === 'selectionChanged').at(-1).entityId;
+    };
+
+    const firstId = duplicate();
+    assert.ok(findEntity(app(), 'Box 1'));
+    duplicate();
+    assert.ok(findEntity(app(), 'Box 2'), 'a copy of Box 1 becomes Box 2');
+    runtime.dispatch({ type: 'selectEntity', entityId: 'box' });
+    duplicate();
+    assert.ok(findEntity(app(), 'Box 3'), 'copying the original skips occupied numeric names');
+    runtime.dispatch({ type: 'selectEntity', entityId: firstId });
+    duplicate();
+    assert.ok(findEntity(app(), 'Box 4'));
+    runtime.dispatch({ type: 'undo' });
+    assert.equal(findEntity(app(), 'Box 4'), null);
+    duplicate();
+    assert.ok(findEntity(app(), 'Box 4'), 'an available number is reused after undo');
+    assert.equal(app().root.children.some(entity => entity.name.includes('Copy')), false);
+});
+
+test('copying a legacy Copy-named duplicate starts using the numeric series', async (t) => {
+    const { app, pointer, runtime } = await createRuntimeHarness(t);
+    runtime.dispatch({ type: 'setTransformTool', tool: 'translate' });
+    pointer('pointerdown');
+    pointer('pointermove', { x: 420, y: 300 });
+    pointer('pointerup', { buttons: 0 });
+    pointer('mouseup', { buttons: 0 });
+    findEntity(app(), 'Box 1').name = 'Box Copy Copy';
+
+    pointer('pointerdown');
+    pointer('pointermove', { x: 420, y: 300 });
+    pointer('pointerup', { buttons: 0 });
+    pointer('mouseup', { buttons: 0 });
+    assert.ok(findEntity(app(), 'Box 1'));
 });
 
 test('Alt click, empty-space Alt drag, Scale, and pointer cancellation do not leave copies', async (t) => {
@@ -153,25 +197,25 @@ test('Alt click, empty-space Alt drag, Scale, and pointer cancellation do not le
     pointer('pointerdown');
     pointer('pointerup', { buttons: 0 });
     pointer('mouseup', { buttons: 0 });
-    assert.equal(findEntity(app(), 'Box Copy'), null, 'a handle click without movement rolls back the provisional copy');
+    assert.equal(findEntity(app(), 'Box 1'), null, 'a handle click without movement rolls back the provisional copy');
 
     pointer('pointerdown', { x: 5 });
     pointer('pointermove', { x: 35, y: 300 });
     pointer('pointerup', { x: 35, y: 300, buttons: 0 });
     pointer('mouseup', { x: 35, y: 300, buttons: 0 });
-    assert.equal(findEntity(app(), 'Box Copy'), null, 'Alt dragging empty space does not duplicate');
+    assert.equal(findEntity(app(), 'Box 1'), null, 'Alt dragging empty space does not duplicate');
 
     runtime.dispatch({ type: 'setTransformTool', tool: 'scale' });
     pointer('pointerdown');
     pointer('pointerup', { buttons: 0 });
     pointer('mouseup', { buttons: 0 });
-    assert.equal(findEntity(app(), 'Box Copy'), null, 'Scale mode does not duplicate');
+    assert.equal(findEntity(app(), 'Box 1'), null, 'Scale mode does not duplicate');
 
     runtime.dispatch({ type: 'setTransformTool', tool: 'translate' });
     pointer('pointerdown');
     pointer('pointermove', { x: 420, y: 300 });
     pointer('pointercancel', { buttons: 0 });
-    assert.equal(findEntity(app(), 'Box Copy'), null, 'pointer cancellation removes the provisional copy');
+    assert.equal(findEntity(app(), 'Box 1'), null, 'pointer cancellation removes the provisional copy');
     assert.equal(eventsHasDuplicateHistory(harness.events), false);
 });
 
@@ -186,12 +230,12 @@ test('Reset Scene removes created copies and restores the initial scene', async 
     pointer('pointermove', { x: 420, y: 300 });
     pointer('pointerup', { buttons: 0 });
     pointer('mouseup', { buttons: 0 });
-    assert.ok(findEntity(app(), 'Box Copy'));
+    assert.ok(findEntity(app(), 'Box 1'));
 
     runtime.dispatch({ type: 'resetScene' });
 
-    assert.equal(findEntity(app(), 'Box Copy'), null);
+    assert.equal(findEntity(app(), 'Box 1'), null);
     assert.deepEqual(source.getPosition().toArray(), sourcePosition);
-    assert.equal(harness.events.filter(event => event.type === 'sceneChanged').at(-1).scene.entities.some(entity => entity.name === 'Box Copy'), false);
+    assert.equal(harness.events.filter(event => event.type === 'sceneChanged').at(-1).scene.entities.some(entity => entity.name === 'Box 1'), false);
     assert.equal(harness.events.filter(event => event.type === 'historyChanged').at(-1).history.canUndo, false);
 });

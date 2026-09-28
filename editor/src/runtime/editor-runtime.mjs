@@ -391,11 +391,13 @@ export class EditorRuntime {
 
         const scene = this.#scene.snapshot();
         const names = new Set(scene.entities.map(entity => entity.name));
-        const baseName = `${source.name} Copy`;
-        let name = baseName;
-        let suffix = 2;
+        const numberedName = /^(.*) ([1-9]\d*)$/.exec(source.name);
+        const sourceBaseName = numberedName?.[1] ?? source.name;
+        const baseName = sourceEntityId.includes('-copy-') ? sourceBaseName.replace(/(?: Copy)+$/, '') : sourceBaseName;
+        let suffix = numberedName && Number.isSafeInteger(Number(numberedName[2])) ? Number(numberedName[2]) + 1 : 1;
+        let name = `${baseName} ${suffix}`;
         while (names.has(name)) {
-            name = `${baseName} ${suffix++}`;
+            name = `${baseName} ${++suffix}`;
         }
 
         let entityId;
