@@ -3,6 +3,7 @@ import test from 'node:test';
 import { JSDOM } from 'jsdom';
 
 import { parseNumberDraft } from '../src/shell/number-draft.mjs';
+import { DEFAULT_LAYOUT } from '../src/shell/layout-preferences.mjs';
 
 test('numeric literals parse without executing expressions', () => {
     for (const value of ['', '-', '.', '1e', '1/0', '2+2', 'Infinity', '0x10', 'NaN', 'alert(1)']) {
@@ -128,12 +129,28 @@ test('Inspector and toolbar maintain current state through real React DOM events
     await enter('[aria-label="Speed"]');
     assert.deepEqual(speedCommits, [0.5]);
 
-    const renderToolbar = () => act(() => root.render(createElement(Toolbar, { state, dispatch, ready: true, isNavigationActive: () => false })));
+    const renderToolbar = () => act(() => root.render(createElement(Toolbar, {
+        state,
+        dispatch,
+        ready: true,
+        isNavigationActive: () => false,
+        layout: DEFAULT_LAYOUT,
+        hide() {},
+        show() {},
+        openExternal() {},
+        resetLayout() {},
+        showHelp: false,
+        setShowHelp() {}
+    })));
     await renderToolbar();
+    const { Viewport } = await import('../src/shell/Viewport.mjs');
+    const canvasRef = { current: document.createElement('canvas') };
+    const renderViewport = () => act(() => root.render(createElement(Viewport, { canvasRef, state, dispatch, showHelp: false, setShowHelp() {} })));
+    await renderViewport();
     await act(() => document.querySelector('.snap-button').click());
     assert.equal(commands.at(-1).enabled, true);
     state = { ...state, snap: { ...state.snap, enabled: true }, coordinateSpace: 'local' };
-    await renderToolbar();
+    await renderViewport();
     await act(() => document.querySelector('.snap-button').click());
     assert.equal(commands.at(-1).enabled, false);
     await act(() => document.querySelector('.coordinate-space').click());
@@ -190,7 +207,19 @@ test('Inspector and toolbar maintain current state through real React DOM events
 
     // Ignored when navigation is active
     let navActive = true;
-    const renderNavToolbar = () => act(() => root.render(createElement(Toolbar, { state: { ...state, activeTool: 'translate' }, dispatch, ready: true, isNavigationActive: () => navActive })));
+    const renderNavToolbar = () => act(() => root.render(createElement(Toolbar, {
+        state: { ...state, activeTool: 'translate' },
+        dispatch,
+        ready: true,
+        isNavigationActive: () => navActive,
+        layout: DEFAULT_LAYOUT,
+        hide() {},
+        show() {},
+        openExternal() {},
+        resetLayout() {},
+        showHelp: false,
+        setShowHelp() {}
+    })));
     await renderNavToolbar();
     const commandCountBeforeNav = commands.length;
     dispatchKey({ key: '~', code: 'Backquote' });
@@ -262,10 +291,8 @@ test('Inspector and toolbar maintain current state through real React DOM events
     input.remove();
 
     // Verify Viewport chrome and hint reflect coordinate space shortcut
-    const { Viewport } = await import('../src/shell/Viewport.mjs');
-    const canvasRef = { current: document.createElement('canvas') };
-    await act(() => root.render(createElement(Viewport, { canvasRef, state: { ...state, coordinateSpace: 'world', activeTool: 'translate' }, dispatch })));
-    const spaceIndicator = document.querySelector('.viewport-toolbar span[title*="~"]');
+    await act(() => root.render(createElement(Viewport, { canvasRef, state: { ...state, coordinateSpace: 'world', activeTool: 'translate' }, dispatch, showHelp: false, setShowHelp() {} })));
+    const spaceIndicator = document.querySelector('.viewport-toolbar .coordinate-space');
     assert.ok(spaceIndicator);
     assert.equal(spaceIndicator.textContent, 'World');
     const hint = document.querySelector('.viewport-hint');

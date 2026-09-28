@@ -28,7 +28,7 @@ test('native editor menu delegates clicks without intercepting renderer shortcut
     assert.deepEqual(commands, ['undo', 'redo', 'focusSelected', 'frameAll']);
 });
 
-test('sandbox preload exposes native commands using its built-in CommonJS bridge', (t) => {
+test('sandbox preload exposes native commands and isolated tool windows', async (t) => {
     const preloadPath = fileURLToPath(new URL('../electron/preload.cjs', import.meta.url));
     const mainSource = fs.readFileSync(fileURLToPath(new URL('../electron/main.mjs', import.meta.url)), 'utf8');
     assert.ok(mainSource.includes('preload: path.join(__dirname, \'preload.cjs\')'));
@@ -36,6 +36,7 @@ test('sandbox preload exposes native commands using its built-in CommonJS bridge
 
     let bridge;
     const listeners = new Map();
+    const messages = [];
     vm.runInNewContext(fs.readFileSync(preloadPath, 'utf8'), {
         require: (id) => {
             assert.equal(id, 'electron');
@@ -44,6 +45,11 @@ test('sandbox preload exposes native commands using its built-in CommonJS bridge
                     bridge = api;
                 } },
                 ipcRenderer: {
+                    send: (channel, ...args) => messages.push([channel, ...args]),
+                    invoke: (channel, ...args) => {
+                        messages.push([channel, ...args]);
+                        return Promise.resolve(true);
+                    },
                     on: (channel, listener) => listeners.set(channel, listener),
                     removeListener: (channel, listener) => {
                         if (listeners.get(channel) === listener) {
@@ -64,6 +70,39 @@ test('sandbox preload exposes native commands using its built-in CommonJS bridge
     assert.deepEqual(received, ['undo', 'frameAll']);
     unsubscribe();
     assert.equal(listeners.has('lit-editor:command'), false);
+
+    assert.equal(await bridge.openPanelWindow('hierarchy'), true);
+    bridge.focusPanelWindow('hierarchy');
+    bridge.publishPanelState({ runtimeStatus: 'ready' });
+    bridge.sendPanelCommand({ type: 'selectEntity', entityId: 'box' });
+    assert.deepEqual(messages.map(item => item[0]), [
+        'lit-editor:open-panel-window', 'lit-editor:focus-panel-window',
+        'lit-editor:panel-state', 'lit-editor:panel-command'
+    ]);
+    assert.equal(await bridge.openFloatingWindow({ id: 'float-hierarchy', root: { type: 'tabs', ids: ['hierarchy'], active: 'hierarchy' } }), true);
+    bridge.focusFloatingWindow('float-hierarchy');
+    bridge.closeFloatingWindow('float-hierarchy');
+    bridge.requestFloatingLayout();
+    bridge.publishFloatingLayout({ type: 'tabs', ids: ['hierarchy'], active: 'hierarchy' });
+    assert.deepEqual(messages.slice(-5).map(item => item[0]), [
+        'lit-editor:open-floating-window', 'lit-editor:focus-floating-window',
+        'lit-editor:close-floating-window', 'lit-editor:request-floating-layout', 'lit-editor:floating-layout-changed'
+    ]);
+    const roots = [];
+    const stopLayout = bridge.onFloatingLayout(root => roots.push(root));
+    listeners.get('lit-editor:floating-layout')({}, { type: 'tabs', ids: ['hierarchy'], active: 'hierarchy' });
+    assert.equal(roots[0].active, 'hierarchy');
+    stopLayout();
+    const closed = [];
+    const stopClosed = bridge.onFloatingWindowClosed(id => closed.push(id));
+    listeners.get('lit-editor:floating-window-closed')({}, 'float-hierarchy');
+    assert.deepEqual(closed, ['float-hierarchy']);
+    stopClosed();
+    const snapshots = [];
+    const stopState = bridge.onPanelState(state => snapshots.push(state));
+    listeners.get('lit-editor:panel-state')({}, { selectedEntityId: 'box' });
+    assert.equal(snapshots[0].selectedEntityId, 'box');
+    stopState();
 
     const previous = Object.getOwnPropertyDescriptor(globalThis, 'litEngineDesktop');
     globalThis.litEngineDesktop = bridge;

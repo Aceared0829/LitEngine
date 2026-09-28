@@ -1,15 +1,31 @@
 import { Button } from '@playcanvas/pcui/react';
-import { useState } from 'react';
+import { useRef } from 'react';
 
 import { jsx } from '../jsx.mjs';
 import { NumberField } from './NumberField.mjs';
 
 /**
- * @param {{ canvasRef: import('react').RefObject<HTMLCanvasElement | null>, state: import('../domain/editor-reducer.mjs').EditorState, dispatch: (command: import('../contracts/editor-contracts.mjs').EditorCommand) => void }} props - Viewport props.
+ * @param {object} props - Viewport and its controls.
+ * @param {import('react').RefObject<HTMLCanvasElement | null>} props.canvasRef - Canvas ref.
+ * @param {import('../domain/editor-reducer.mjs').EditorState} props.state - Editor state.
+ * @param {(command: import('../contracts/editor-contracts.mjs').EditorCommand) => void} props.dispatch - Command dispatcher.
+ * @param {boolean} props.showHelp - Viewport help visibility.
+ * @param {(visible: boolean) => void} props.setShowHelp - Set viewport help visibility.
  */
-export function Viewport({ canvasRef, state, dispatch }) {
-    const [showHelp, setShowHelp] = useState(false);
+export function Viewport({ canvasRef, state, dispatch, showHelp, setShowHelp }) {
+    const stateRef = useRef(state);
+    stateRef.current = state;
     const effectiveSpace = state.activeTool === 'scale' ? 'local' : state.coordinateSpace;
+    const ready = state.runtimeStatus === 'ready';
+    const activeSnapTool = state.activeTool === 'select' ? 'translate' : state.activeTool;
+    const increment = state.snap[`${activeSnapTool}Increment`];
+    const toolButton = (name, label, shortcut) => jsx(Button, {
+        class: ['viewport-tool-button', ...(state.activeTool === name ? ['is-active'] : [])],
+        text: `${label} ${shortcut}`,
+        tooltip: `${label} tool (${shortcut})`,
+        disabled: !ready,
+        onClick: () => dispatch({ type: 'setTransformTool', tool: name })
+    });
 
     return jsx(
         'main',
@@ -21,11 +37,27 @@ export function Viewport({ canvasRef, state, dispatch }) {
             state.runtimeStatus === 'error' ? state.error : '正在初始化本地 3D 视口…'
         ),
         jsx('div', { className: 'viewport-chrome viewport-toolbar' },
-            jsx('span', { className: 'viewport-mode' }, state.activeTool === 'select' ? 'Select' : state.activeTool),
+            toolButton('select', 'Select', 'Q'),
+            toolButton('translate', 'Move', 'W'),
+            toolButton('rotate', 'Rotate', 'E'),
+            toolButton('scale', 'Scale', 'R'),
             jsx('span', { className: 'viewport-separator' }),
-            jsx('span', { title: state.activeTool === 'scale' ? 'Coordinate space: Local (Scale is locked to local space)' : `Coordinate space: ${effectiveSpace === 'world' ? 'World' : 'Local'} (~ / X to toggle)` }, effectiveSpace === 'world' ? 'World' : 'Local'),
-            jsx('span', { className: 'viewport-separator' }),
-            jsx('span', { className: state.snap.enabled ? 'snap-indicator is-enabled' : 'snap-indicator' }, `Snap ${state.snap.enabled ? 'On' : 'Off'}`),
+            jsx(Button, {
+                class: 'coordinate-space',
+                text: effectiveSpace === 'world' ? 'World' : 'Local',
+                tooltip: state.activeTool === 'scale' ? 'Scale uses local space' : 'Toggle world/local transform space (~ / X)',
+                disabled: !ready || state.activeTool === 'scale',
+                onClick: () => dispatch({ type: 'setCoordinateSpace', coordinateSpace: stateRef.current.coordinateSpace === 'world' ? 'local' : 'world' })
+            }),
+            jsx(Button, {
+                class: ['snap-button', ...(state.snap.enabled ? ['is-active'] : [])],
+                text: `Snap ${state.snap.enabled ? 'On' : 'Off'} · ${increment}`,
+                tooltip: `Toggle transform snap (${activeSnapTool} increment ${increment})`,
+                disabled: !ready,
+                onClick: () => dispatch({ type: 'setSnapEnabled', enabled: !stateRef.current.snap.enabled })
+            }),
+            jsx(Button, { class: 'viewport-action', text: 'Frame · F', disabled: !ready, onClick: () => dispatch({ type: 'focusSelected' }) }),
+            jsx(Button, { class: 'viewport-action', text: 'Frame All', disabled: !ready, onClick: () => dispatch({ type: 'frameAll' }) }),
             jsx('span', { className: 'viewport-chrome-spacer' }),
             jsx('label', { className: 'viewport-speed' }, 'Speed ', jsx(NumberField, {
                 min: 0.1,

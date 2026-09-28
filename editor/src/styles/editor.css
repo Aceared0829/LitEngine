@@ -788,3 +788,922 @@ input:focus-visible {
         animation-duration: 0.01ms !important;
     }
 }
+
+/* The application chrome is fixed; only the workspace beneath it is dockable. */
+.editor-app {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    min-height: 0;
+}
+
+.editor-toolbar {
+    position: relative;
+    z-index: 50;
+    flex: 0 0 42px;
+    gap: 14px;
+    padding: 0 14px;
+    background: #202831;
+    box-shadow: none;
+    app-region: drag;
+}
+
+.editor-toolbar.desktop-chrome {
+    padding-right: 150px;
+}
+
+.global-menus {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    height: 100%;
+    app-region: no-drag;
+}
+
+.global-menu {
+    position: relative;
+}
+
+.global-menu-trigger,
+.global-menu-item,
+.dock-tab button,
+.floating-panel-header button {
+    border: 0;
+    background: transparent;
+    color: #dce5ed;
+    cursor: pointer;
+}
+
+.global-menu-trigger {
+    min-width: 44px;
+    height: 30px;
+    border-radius: 4px;
+    padding: 0 9px;
+    font-size: 12px;
+}
+
+.global-menu-trigger:hover,
+.global-menu-trigger.is-open {
+    background: #34414d;
+    color: #fff;
+}
+
+.global-menu-popover {
+    position: absolute;
+    top: 34px;
+    left: 0;
+    z-index: 60;
+    min-width: 190px;
+    border: 1px solid #4b5966;
+    border-radius: 6px;
+    padding: 5px;
+    background: #252e37;
+    box-shadow: 0 10px 28px rgb(0 0 0 / 38%);
+}
+
+.global-menu-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    min-height: 29px;
+    border-radius: 3px;
+    padding: 0 8px;
+    font-size: 11px;
+    text-align: left;
+    white-space: nowrap;
+}
+
+.global-menu-item:hover:not(:disabled) {
+    background: #34516a;
+}
+
+.global-menu-item:disabled {
+    color: #83909a;
+    cursor: default;
+}
+
+.menu-check {
+    width: 13px;
+    color: #78c4ee;
+}
+
+.menu-shortcut {
+    margin-left: auto;
+    color: #a5b3c0;
+    font-size: 10px;
+}
+
+.global-bar-title {
+    margin-left: auto;
+    color: #8493a1;
+    font-size: 11px;
+    white-space: nowrap;
+}
+
+.workspace-body {
+    position: relative;
+    display: grid;
+    flex: 1 1 auto;
+    grid-template-columns: var(--left-dock-width) minmax(0, 1fr) var(--right-dock-width);
+    grid-template-rows: minmax(0, 1fr) var(--bottom-dock-height);
+    min-width: 0;
+    min-height: 0;
+    overflow: hidden;
+    background: #111418;
+}
+
+.dock-zone {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    min-height: 0;
+    background: #191f26;
+}
+
+.dock-zone-left {
+    grid-column: 1;
+    grid-row: 1 / 3;
+    border-right: 1px solid #303842;
+}
+
+.dock-zone-right {
+    grid-column: 3;
+    grid-row: 1 / 3;
+    border-left: 1px solid #303842;
+}
+
+.dock-zone-bottom {
+    grid-column: 2;
+    grid-row: 2;
+    border-top: 1px solid #303842;
+}
+
+.dock-tabs,
+.floating-panel-header {
+    display: flex;
+    flex: 0 0 34px;
+    align-items: center;
+    min-width: 0;
+    border-bottom: 1px solid #34404c;
+    background: #222a32;
+}
+
+.dock-tabs {
+    overflow-x: auto;
+}
+
+.dock-tab {
+    display: flex;
+    align-items: center;
+    min-width: 0;
+    height: 100%;
+    border-right: 1px solid #34404c;
+}
+
+.dock-tab.is-active {
+    background: #2a3743;
+    box-shadow: inset 0 -2px #61b4e6;
+}
+
+.dock-tab > button:first-child {
+    overflow: hidden;
+    max-width: 150px;
+    height: 100%;
+    padding: 0 10px;
+    font-size: 11px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.dock-tab .panel-drag-handle,
+.dock-tab .panel-close,
+.floating-panel-header .panel-close {
+    width: 24px;
+    height: 26px;
+    padding: 0;
+    color: #9baab7;
+    font-size: 15px;
+}
+
+.panel-drag-handle {
+    cursor: grab !important;
+}
+
+.dock-tab .panel-close:hover,
+.floating-panel-header .panel-close:hover {
+    background: #733f48;
+    color: #fff;
+}
+
+.dock-panel {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: hidden;
+}
+
+.dock-panel[hidden] {
+    display: none;
+}
+
+.dock-panel > .editor-panel {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    height: 100%;
+    border: 0;
+}
+
+.dock-panel > .editor-panel > .pcui-panel-header {
+    display: none;
+}
+
+.dock-panel > .editor-panel > .pcui-panel-content {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-x: hidden;
+    overflow-y: auto;
+}
+
+.dock-bottom-resize {
+    position: absolute;
+    z-index: 10;
+    top: -4px;
+    left: 0;
+    width: 100%;
+    height: 8px;
+    border: 0;
+    background: transparent;
+    cursor: row-resize;
+}
+
+.dock-bottom-resize:hover {
+    background: #57afe3;
+}
+
+.workspace-body > .editor-viewport {
+    grid-column: 2;
+    grid-row: 1;
+    container-type: inline-size;
+}
+
+.viewport-toolbar {
+    top: 8px;
+    left: 8px;
+    right: 8px;
+    flex-wrap: wrap;
+    gap: 4px;
+    min-height: 36px;
+    padding: 4px 6px;
+    background: rgb(28 38 48 / 94%);
+    text-transform: none;
+}
+
+.viewport-toolbar .pcui-button {
+    min-width: 0;
+    height: 25px;
+    border: 1px solid #405261;
+    border-radius: 4px;
+    padding: 0 6px;
+    background: #293742;
+    color: #e2eaf1;
+    font-size: 10px;
+}
+
+.viewport-toolbar .pcui-button:hover:not(.pcui-button-disabled),
+.viewport-toolbar .pcui-button.is-active {
+    border-color: #5baee0;
+    background: #295674;
+    color: #fff;
+}
+
+.viewport-toolbar .pcui-button.pcui-button-disabled {
+    color: #82919e;
+}
+
+.viewport-toolbar .viewport-help-button {
+    width: 25px;
+    background: transparent;
+}
+
+.floating-layer {
+    position: absolute;
+    inset: 0;
+    z-index: 12;
+    pointer-events: none;
+}
+
+.floating-panel {
+    position: absolute;
+    display: flex;
+    flex-direction: column;
+    min-width: 240px;
+    min-height: 180px;
+    overflow: hidden;
+    border: 1px solid #516577;
+    border-radius: 6px;
+    background: #191f26;
+    box-shadow: 0 14px 40px rgb(0 0 0 / 55%);
+    pointer-events: auto;
+}
+
+.floating-panel-title {
+    flex: 1;
+    height: 100%;
+    padding: 0 10px;
+    cursor: grab !important;
+    font-size: 11px;
+    font-weight: 700;
+    text-align: left;
+}
+
+.floating-resize {
+    position: absolute;
+    right: 0;
+    bottom: 0;
+    width: 16px;
+    height: 16px;
+    border: 0;
+    background: linear-gradient(135deg, transparent 48%, #8fa2b3 50%, #8fa2b3 56%, transparent 58%);
+    cursor: nwse-resize;
+}
+
+.editor-panel-dragging,
+.editor-panel-dragging * {
+    user-select: none !important;
+}
+
+.dock-drop-overlay {
+    position: absolute;
+    inset: 0;
+    z-index: 30;
+    pointer-events: none;
+}
+
+.dock-drop-target {
+    position: absolute;
+    display: grid;
+    place-items: center;
+    border: 1px dashed #66849a;
+    border-radius: 5px;
+    background: rgb(47 75 95 / 30%);
+    color: #d2e6f3;
+    font-size: 11px;
+    opacity: 0.75;
+}
+
+.dock-drop-target.is-target {
+    border: 2px solid #66c1f1;
+    background: rgb(61 132 177 / 42%);
+    opacity: 1;
+}
+
+.dock-drop-left,
+.dock-drop-right {
+    top: 10%;
+    bottom: 10%;
+    width: 15%;
+}
+
+.dock-drop-left { left: 8px; }
+.dock-drop-right { right: 8px; }
+.dock-drop-bottom { left: 22%; right: 22%; bottom: 8px; height: 16%; }
+.dock-drop-float { left: 38%; right: 38%; top: 38%; height: 16%; }
+
+.editor-status-bar {
+    flex: 0 0 28px;
+}
+
+@container (max-width: 680px) {
+    .editor-view-cube { top: 81px; }
+    .viewport-help-card { top: 81px; }
+}
+
+/* Every editor surface, including the viewport, shares the same recursive dock tree. */
+.workspace-body {
+    display: block;
+}
+
+.workspace-main,
+.workspace-split,
+.workspace-split-child,
+.workspace-group,
+.floating-window-content {
+    min-width: 0;
+    min-height: 0;
+}
+
+.workspace-main {
+    width: 100%;
+    height: 100%;
+}
+
+.workspace-split {
+    display: flex;
+    width: 100%;
+    height: 100%;
+}
+
+.workspace-split-column {
+    flex-direction: column;
+}
+
+.workspace-split-child {
+    display: flex;
+    flex-basis: 0;
+    overflow: hidden;
+}
+
+.workspace-split-gutter {
+    flex: 0 0 6px;
+    align-self: stretch;
+    border: 0;
+    padding: 0;
+    background: #2d3842;
+    cursor: col-resize;
+}
+
+.workspace-split-column > .workspace-split-gutter {
+    cursor: row-resize;
+}
+
+.workspace-split-gutter:hover,
+.workspace-split-gutter:focus-visible {
+    background: #57afe3;
+}
+
+.workspace-group {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    overflow: hidden;
+    background: #191f26;
+}
+
+.workspace-tabs {
+    display: flex;
+    flex: 0 0 34px;
+    overflow-x: auto;
+    border-bottom: 1px solid #34404c;
+    background: #222a32;
+}
+
+.workspace-tab {
+    display: flex;
+    flex: 0 0 auto;
+    align-items: center;
+    height: 100%;
+    border-right: 1px solid #34404c;
+}
+
+.workspace-tab.is-active {
+    background: #2a3743;
+    box-shadow: inset 0 -2px #61b4e6;
+}
+
+.workspace-tab-title,
+.workspace-tab .panel-close {
+    border: 0;
+    background: transparent;
+    color: #dce5ed;
+}
+
+.workspace-tab-title {
+    max-width: 165px;
+    height: 100%;
+    overflow: hidden;
+    padding: 0 12px;
+    font-size: 11px;
+    font-weight: 600;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    cursor: grab;
+    user-select: none;
+}
+
+.workspace-tab-title:active {
+    cursor: grabbing;
+}
+
+.workspace-tab .panel-close {
+    width: 23px;
+    height: 26px;
+    padding: 0;
+    color: #9baab7;
+    cursor: pointer;
+}
+
+.workspace-tab .panel-close:hover {
+    background: #733f48;
+    color: white;
+}
+
+.workspace-content {
+    flex: 1 1 auto;
+    min-width: 0;
+    min-height: 0;
+    overflow: hidden;
+}
+
+.workspace-content[hidden] {
+    display: none;
+}
+
+.workspace-panel-host {
+    width: 100%;
+    height: 100%;
+    min-width: 0;
+    min-height: 0;
+}
+
+.workspace-panel-host > .editor-panel {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    height: 100%;
+    border: 0;
+}
+
+.workspace-panel-host > .editor-panel > .pcui-panel-header {
+    display: none;
+}
+
+.workspace-panel-host > .editor-panel > .pcui-panel-content {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-x: hidden;
+    overflow-y: auto;
+}
+
+.workspace-panel-host > .editor-viewport {
+    width: 100%;
+    height: 100%;
+    container-type: inline-size;
+}
+
+.workspace-empty {
+    display: grid;
+    place-items: center;
+    width: 100%;
+    height: 100%;
+    color: #8fa1af;
+    font-size: 12px;
+}
+
+.workspace-parking {
+    position: absolute;
+    left: -10000px;
+    top: -10000px;
+    /* Keep the hidden viewport render target valid when another tab is active. */
+    width: 64px;
+    height: 64px;
+    overflow: hidden;
+    visibility: hidden;
+    pointer-events: none;
+}
+
+.floating-window {
+    position: absolute;
+    display: flex;
+    flex-direction: column;
+    min-width: 240px;
+    min-height: 180px;
+    overflow: hidden;
+    border: 1px solid #516577;
+    border-radius: 6px;
+    background: #191f26;
+    box-shadow: 0 14px 40px rgb(0 0 0 / 55%);
+    pointer-events: auto;
+}
+
+.floating-window.is-minimized {
+    min-height: 34px;
+}
+
+.floating-window.is-maximized {
+    border-radius: 0;
+}
+
+.floating-window .workspace-tabs {
+    padding-right: 144px;
+    cursor: grab;
+    scrollbar-width: none;
+    user-select: none;
+}
+
+.floating-window .workspace-tabs::-webkit-scrollbar {
+    display: none;
+}
+
+.floating-window .workspace-tab {
+    flex: 0 1 auto;
+    min-width: 0;
+}
+
+.floating-window .workspace-tab-title {
+    min-width: 0;
+    padding: 0 8px;
+}
+
+.floating-window .workspace-tabs:active {
+    cursor: grabbing;
+}
+
+.floating-window-minimized-title {
+    display: flex;
+    flex: 0 0 32px;
+    align-items: center;
+    padding: 0 12px;
+    overflow: hidden;
+    background: #222a32;
+    color: #dce5ed;
+    cursor: grab;
+    font-size: 11px;
+    font-weight: 600;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    user-select: none;
+}
+
+.floating-window-controls {
+    position: absolute;
+    z-index: 3;
+    top: 0;
+    right: 0;
+    display: flex;
+    align-items: stretch;
+    height: 33px;
+    background: #222a32;
+    border-bottom: 1px solid #34404c;
+}
+
+.floating-window-controls button {
+    width: 36px;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: #d7e4ee;
+    cursor: pointer;
+    font: 20px/1 Arial, sans-serif;
+}
+
+.floating-window-controls button:hover {
+    background: #526679;
+}
+
+.floating-window-controls .floating-window-close:hover {
+    background: #ba3e47;
+    color: white;
+}
+
+.floating-window-content {
+    display: flex;
+    flex: 1 1 auto;
+    min-height: 0;
+}
+
+.floating-window.is-minimized .floating-window-content {
+    display: none;
+}
+
+.floating-window-resize {
+    position: absolute;
+    z-index: 2;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    touch-action: none;
+}
+
+.floating-window-resize-n,
+.floating-window-resize-s {
+    right: 14px;
+    left: 14px;
+    height: 7px;
+    cursor: ns-resize;
+}
+
+.floating-window-resize-n { top: 0; }
+.floating-window-resize-s { bottom: 0; }
+
+.floating-window-resize-e,
+.floating-window-resize-w {
+    top: 14px;
+    bottom: 14px;
+    width: 7px;
+    cursor: ew-resize;
+}
+
+.floating-window-resize-e { right: 0; }
+.floating-window-resize-w { left: 0; }
+
+.floating-window-resize-ne,
+.floating-window-resize-nw,
+.floating-window-resize-se,
+.floating-window-resize-sw {
+    width: 16px;
+    height: 16px;
+}
+
+.floating-window-resize-ne,
+.floating-window-resize-sw { cursor: nesw-resize; }
+.floating-window-resize-nw,
+.floating-window-resize-se { cursor: nwse-resize; }
+.floating-window-resize-ne { top: 0; right: 0; }
+.floating-window-resize-nw { top: 0; left: 0; }
+.floating-window-resize-se { right: 0; bottom: 0; }
+.floating-window-resize-sw { bottom: 0; left: 0; }
+
+.floating-window-resize:hover,
+.floating-window-resize:focus-visible {
+    background: rgb(110 197 242 / 22%);
+}
+
+.workspace-drag-layer {
+    position: absolute;
+    inset: 0;
+    z-index: 30;
+    pointer-events: none;
+}
+
+.workspace-drop-preview {
+    position: absolute;
+    display: grid;
+    place-items: center;
+    border: 2px solid #6ec5f2;
+    border-radius: 4px;
+    background: rgb(60 139 189 / 35%);
+    color: white;
+    font-size: 13px;
+    font-weight: 700;
+    text-shadow: 0 1px 4px #11212b;
+}
+
+.workspace-drag-label {
+    position: absolute;
+    border: 1px solid #7ab7dc;
+    border-radius: 4px;
+    padding: 5px 8px;
+    background: #243c4c;
+    color: white;
+    font-size: 11px;
+    white-space: nowrap;
+}
+
+.workspace-tab .panel-popout {
+    width: 24px;
+    height: 26px;
+    border: 0;
+    padding: 0;
+    background: transparent;
+    color: #9ec8e2;
+    cursor: pointer;
+    font-size: 15px;
+}
+
+.workspace-tab .panel-popout:hover {
+    background: #34516a;
+    color: white;
+}
+
+.popout-app {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    background: #191f26;
+}
+
+.popout-toolbar {
+    display: flex;
+    flex: 0 0 42px;
+    align-items: center;
+    gap: 12px;
+    padding: 0 150px 0 12px;
+    background: #202831;
+    color: #e6edf4;
+    app-region: drag;
+}
+
+.popout-toolbar strong {
+    font-size: 12px;
+}
+
+.popout-toolbar span {
+    color: #a9bccb;
+    font-size: 11px;
+}
+
+.popout-toolbar button {
+    height: 26px;
+    margin-left: auto;
+    border: 1px solid #50697c;
+    border-radius: 4px;
+    padding: 0 8px;
+    background: #2d485b;
+    color: white;
+    cursor: pointer;
+    font-size: 10px;
+    white-space: nowrap;
+    app-region: no-drag;
+}
+
+.popout-content {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: hidden;
+}
+
+.popout-content > .editor-panel {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    height: 100%;
+    border: 0;
+}
+
+.popout-content > .editor-panel > .pcui-panel-header {
+    display: none;
+}
+
+.popout-content > .editor-panel > .pcui-panel-content {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-x: hidden;
+    overflow-y: auto;
+}
+
+.native-floating-app {
+    display: flex;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    background: #191f26;
+}
+
+.native-floating-app .workspace-tabs {
+    overflow: hidden;
+}
+
+.native-floating-app > .workspace-group > .workspace-tabs,
+.native-floating-app > .workspace-split-row > .workspace-split-child:last-child .workspace-tabs,
+.native-floating-app > .workspace-split-column > .workspace-split-child:first-child .workspace-tabs {
+    padding-right: 140px;
+}
+
+.native-floating-tab {
+    flex: 0 1 auto;
+    min-width: 0;
+    height: 33px;
+    overflow: hidden;
+    border: 0;
+    border-right: 1px solid #34404c;
+    padding: 0 12px;
+    background: transparent;
+    color: #dce5ed;
+    cursor: pointer;
+    font-size: 11px;
+    font-weight: 600;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    app-region: no-drag;
+}
+
+.native-floating-tab.is-active {
+    background: #2a3743;
+    box-shadow: inset 0 -2px #61b4e6;
+}
+
+.native-floating-grip {
+    flex: 1 1 auto;
+    min-width: 16px;
+    height: 33px;
+    cursor: grab;
+    user-select: none;
+    app-region: drag;
+}
+
+.native-floating-app .workspace-split-gutter {
+    app-region: no-drag;
+}
+
+.native-floating-app .workspace-content > .editor-panel {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    height: 100%;
+    border: 0;
+}
+
+.native-floating-app .workspace-content > .editor-panel > .pcui-panel-header {
+    display: none;
+}
+
+.native-floating-app .workspace-content > .editor-panel > .pcui-panel-content {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-x: hidden;
+    overflow-y: auto;
+}
