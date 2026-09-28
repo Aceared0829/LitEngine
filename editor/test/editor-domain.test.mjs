@@ -2,16 +2,140 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import { Entity } from 'playcanvas';
-import { clampDockWidth, normalizeWorkspaceLayout } from '../src/shell/layout-preferences.mjs';
+import { activatePanel, clampDockWidth, closeFloatingWindow, containsPanel, DEFAULT_LAYOUT, dockPanel, externalizeFloatingWindow, externalizePanel, floatPanel, hidePanel, normalizeWorkspaceLayout, readWorkspaceLayout, resizeFloatingBounds, resizeSplit, restoreExternalGroup, restoreExternalPanel, showPanel, writeWorkspaceLayout } from '../src/shell/layout-preferences.mjs';
+import { dropPositionAt } from '../src/shell/WorkspacePanels.mjs';
 import { isFiniteVector3 } from '../src/domain/editor-reducer.mjs';
 import { TransformHistory } from '../src/runtime/transform-history.mjs';
 
-test('clamps and normalizes persisted dock geometry', () => {
+test('clamps and normalizes nested splits and floating geometry', () => {
     assert.equal(clampDockWidth(Number.NaN, 100, 300), 100);
     assert.equal(clampDockWidth(450, 100, 300), 300);
-    const layout = normalizeWorkspaceLayout({ hierarchyWidth: 900, inspectorWidth: -5 }, 900);
-    assert.ok(layout.hierarchyWidth <= 440);
-    assert.ok(layout.inspectorWidth >= 230);
+    const initial = normalizeWorkspaceLayout(DEFAULT_LAYOUT, 900, 700);
+    const resized = resizeSplit(initial, null, [], 9);
+    assert.equal(normalizeWorkspaceLayout(resized).root.ratio, 0.88);
+    const floating = normalizeWorkspaceLayout(floatPanel(initial, 'inspector', { x: 9999, y: 9999 }), 900, 700);
+    assert.ok(floating.floats[0].x + floating.floats[0].width <= 900);
+    assert.ok(floating.floats[0].y + floating.floats[0].height <= 700);
+});
+
+test('any panel splits or groups relative to another panel, including the viewport', () => {
+    const initial = normalizeWorkspaceLayout(DEFAULT_LAYOUT, 1100, 700);
+    const top = dockPanel(initial, 'viewport', 'inspector', 'top');
+    assert.equal(top.root.second.axis, 'column');
+    assert.ok(containsPanel(top.root.second.first, 'viewport'));
+    assert.ok(containsPanel(top.root.second.second, 'inspector'));
+
+    const grouped = dockPanel(top, 'inspector', 'hierarchy', 'center');
+    assert.deepEqual(grouped.root.first.ids, ['hierarchy', 'inspector']);
+    assert.equal(grouped.root.first.active, 'inspector');
+    assert.equal(activatePanel(grouped, 'hierarchy').root.first.active, 'hierarchy');
+
+    const floating = floatPanel(grouped, 'inspector', { x: 100, y: 100 });
+    const nestedFloat = dockPanel(floating, 'hierarchy', 'inspector', 'bottom');
+    assert.equal(nestedFloat.floats[0].root.axis, 'column');
+    assert.ok(containsPanel(nestedFloat.floats[0].root.second, 'hierarchy'));
+
+    assert.equal(hidePanel(nestedFloat, 'viewport'), nestedFloat);
+    const hidden = hidePanel(nestedFloat, 'hierarchy');
+    assert.ok(hidden.hidden.includes('hierarchy'));
+    const reopened = showPanel(hidden, 'hierarchy');
+    assert.ok(containsPanel(reopened.root, 'hierarchy'));
+    assert.ok(!reopened.hidden.includes('hierarchy'));
+});
+
+test('drop position uses the whole panel edge or center, with its title as tab target', () => {
+    const rect = { left: 100, right: 500, top: 50, bottom: 450, width: 400, height: 400 };
+    assert.equal(dropPositionAt(rect, 300, 60), 'center');
+    assert.equal(dropPositionAt(rect, 105, 250), 'left');
+    assert.equal(dropPositionAt(rect, 495, 250), 'right');
+    assert.equal(dropPositionAt(rect, 300, 100), 'top');
+    assert.equal(dropPositionAt(rect, 300, 445), 'bottom');
+    assert.equal(dropPositionAt(rect, 300, 250), 'center');
+});
+
+test('floating window resizes from every edge without moving the opposite edge', () => {
+    const window = { x: 100, y: 80, width: 400, height: 300 };
+    assert.deepEqual(resizeFloatingBounds(window, 'nw', 50, 25, 900, 700), { x: 150, y: 105, width: 350, height: 275 });
+    assert.deepEqual(resizeFloatingBounds(window, 'se', 30, 40, 900, 700), { x: 100, y: 80, width: 430, height: 340 });
+    assert.deepEqual(resizeFloatingBounds(window, 'w', 999, 0, 900, 700), { x: 260, y: 80, width: 240, height: 300 });
+    assert.deepEqual(resizeFloatingBounds(window, 'n', 0, -999, 900, 700), { x: 100, y: 0, width: 400, height: 380 });
+    assert.deepEqual(resizeFloatingBounds(window, 'e', 999, 0, 900, 700), { x: 100, y: 80, width: 800, height: 300 });
+    assert.deepEqual(resizeFloatingBounds(window, 's', 0, 999, 900, 700), { x: 100, y: 80, width: 400, height: 620 });
+});
+
+test('floating window states survive normalization and closing hides every tool tab', () => {
+    const initial = normalizeWorkspaceLayout(DEFAULT_LAYOUT);
+    const floating = floatPanel(initial, 'inspector');
+    const grouped = dockPanel(floating, 'hierarchy', 'inspector', 'center');
+    const minimized = normalizeWorkspaceLayout({
+        ...grouped,
+        floats: grouped.floats.map(item => ({ ...item, minimized: true, maximized: true }))
+    });
+    assert.equal(minimized.floats[0].minimized, true);
+    assert.equal(minimized.floats[0].maximized, false);
+    const closed = closeFloatingWindow(minimized, minimized.floats[0].id);
+    assert.equal(closed.floats.length, 0);
+    assert.deepEqual([...closed.hidden].sort(), ['hierarchy', 'inspector']);
+    assert.equal(containsPanel(closed.root, 'viewport'), true);
+});
+
+test('a complete floating group leaves for a native window and returns intact', () => {
+    const initial = normalizeWorkspaceLayout(DEFAULT_LAYOUT, 1200, 800);
+    const floating = floatPanel(initial, 'hierarchy', { x: 150, y: 100, width: 600, height: 450 });
+    const grouped = dockPanel(floating, 'inspector', 'hierarchy', 'right');
+    const external = normalizeWorkspaceLayout(externalizeFloatingWindow(grouped, grouped.floats[0].id, { screenX: -1200, screenY: 200 }), 1200, 800);
+    assert.equal(external.floats.length, 0);
+    assert.equal(external.externalGroups.length, 1);
+    assert.equal(external.externalGroups[0].screenX, -1200);
+    assert.equal(external.externalGroups[0].root.axis, 'row');
+    assert.deepEqual(external.hidden, []);
+    assert.ok(containsPanel(external.root, 'viewport'));
+    const restored = normalizeWorkspaceLayout(restoreExternalGroup(external, external.externalGroups[0].id), 1200, 800);
+    assert.equal(restored.externalGroups.length, 0);
+    assert.equal(restored.floats[0].root.axis, 'row');
+    assert.ok(containsPanel(restored.floats[0].root.first, 'hierarchy'));
+    assert.ok(containsPanel(restored.floats[0].root.second, 'inspector'));
+});
+
+test('viewport cannot close or float, while tool panels can leave and return from native windows', () => {
+    const initial = normalizeWorkspaceLayout(DEFAULT_LAYOUT);
+    assert.equal(hidePanel(initial, 'viewport'), initial);
+    assert.equal(floatPanel(initial, 'viewport'), initial);
+    const external = externalizePanel(initial, 'inspector');
+    assert.deepEqual(external.external, ['inspector']);
+    assert.equal(containsPanel(external.root, 'inspector'), false);
+    assert.equal(containsPanel(external.root, 'viewport'), true);
+    const restored = restoreExternalPanel(external, 'inspector');
+    assert.deepEqual(restored.external, []);
+    assert.equal(containsPanel(restored.root, 'inspector'), true);
+
+    const damaged = normalizeWorkspaceLayout({ root: { type: 'tabs', ids: ['hierarchy'], active: 'hierarchy' }, floats: [], external: [] });
+    assert.equal(containsPanel(damaged.root, 'viewport'), true);
+    assert.equal(damaged.hidden.includes('viewport'), false);
+    const invalidFloat = normalizeWorkspaceLayout({ root: null, floats: [{ id: 'bad', root: { type: 'tabs', ids: ['viewport'], active: 'viewport' }, x: 0, y: 0, width: 300, height: 300 }] });
+    assert.ok(containsPanel(invalidFloat.root, 'viewport'));
+    assert.equal(invalidFloat.floats.length, 0);
+});
+
+test('workspace preferences migrate legacy collapsed panels and persist the new layout', (t) => {
+    const previous = Object.getOwnPropertyDescriptor(globalThis, 'localStorage');
+    const values = new Map([['lit-engine-editor.workspace.v1', JSON.stringify({ hierarchyWidth: 290, inspectorWidth: 350, inspectorCollapsed: true })]]);
+    Object.defineProperty(globalThis, 'localStorage', {
+        configurable: true,
+        value: { getItem: key => values.get(key) ?? null, setItem: (key, value) => values.set(key, value) }
+    });
+    t.after(() => {
+        if (previous) {
+            Object.defineProperty(globalThis, 'localStorage', previous);
+        } else {
+            delete globalThis.localStorage;
+        }
+    });
+    const migrated = readWorkspaceLayout();
+    assert.ok(containsPanel(migrated.root, 'viewport'));
+    assert.ok(migrated.hidden.includes('inspector'));
+    writeWorkspaceLayout(migrated);
+    assert.deepEqual(readWorkspaceLayout(), migrated);
 });
 
 test('validates only finite XYZ transforms', () => {

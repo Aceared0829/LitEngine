@@ -1,14 +1,27 @@
-import { Button, Container } from '@playcanvas/pcui/react';
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import { jsx } from '../jsx.mjs';
+import { closeDesktopWindow, focusFloatingWindow, focusPanelWindow, isDesktopEditor } from '../platform/desktop-api.mjs';
+import { containsPanel } from './layout-preferences.mjs';
 import { isEditableTarget } from '../runtime/navigation-input.mjs';
 
 /**
- * @param {{ state: import('../domain/editor-reducer.mjs').EditorState, dispatch: (command: import('../contracts/editor-contracts.mjs').EditorCommand) => void, ready: boolean, isNavigationActive: () => boolean }} props - Toolbar props.
+ * @param {object} props - Global toolbar and menu actions.
+ * @param {import('../domain/editor-reducer.mjs').EditorState} props.state - Editor state.
+ * @param {(command: import('../contracts/editor-contracts.mjs').EditorCommand) => void} props.dispatch - Command dispatcher.
+ * @param {boolean} props.ready - Runtime readiness.
+ * @param {() => boolean} props.isNavigationActive - Navigation state reader.
+ * @param {import('./layout-preferences.mjs').WorkspaceLayout} props.layout - Workspace layout.
+ * @param {(id: import('./layout-preferences.mjs').PanelId) => void} props.hide - Hide a panel.
+ * @param {(id: import('./layout-preferences.mjs').PanelId) => void} props.show - Restore a panel.
+ * @param {(id: 'hierarchy'|'inspector') => void} props.openExternal - Open a native tool window.
+ * @param {() => void} props.resetLayout - Restore default layout.
+ * @param {boolean} props.showHelp - Viewport help visibility.
+ * @param {(visible: boolean) => void} props.setShowHelp - Set viewport help visibility.
  */
-export function Toolbar({ state, dispatch, ready, isNavigationActive }) {
-    const effectiveSpace = state.activeTool === 'scale' ? 'local' : state.coordinateSpace;
+export function Toolbar({ state, dispatch, ready, isNavigationActive, layout, hide, show, openExternal, resetLayout, showHelp, setShowHelp }) {
+    const [openMenu, setOpenMenu] = useState(null);
+    const menuRef = useRef(null);
     const stateRef = useRef(state);
     stateRef.current = state;
     const dispatchRef = useRef(dispatch);
@@ -17,6 +30,25 @@ export function Toolbar({ state, dispatch, ready, isNavigationActive }) {
     readyRef.current = ready;
     const isNavigationActiveRef = useRef(isNavigationActive);
     isNavigationActiveRef.current = isNavigationActive;
+
+    useEffect(() => {
+        const closeOnOutside = (event) => {
+            if (!menuRef.current?.contains(event.target)) {
+                setOpenMenu(null);
+            }
+        };
+        const closeOnEscape = (event) => {
+            if (event.key === 'Escape') {
+                setOpenMenu(null);
+            }
+        };
+        document.addEventListener('pointerdown', closeOnOutside);
+        document.addEventListener('keydown', closeOnEscape);
+        return () => {
+            document.removeEventListener('pointerdown', closeOnOutside);
+            document.removeEventListener('keydown', closeOnEscape);
+        };
+    }, []);
 
     useEffect(() => {
         const activeMousePointers = new Set();
@@ -126,80 +158,67 @@ export function Toolbar({ state, dispatch, ready, isNavigationActive }) {
         };
     }, []);
 
-    const toolButton = (tool, label, shortcut, title) => jsx(Button, {
-        class: ['toolbar-button', 'toolbar-tool', ...(state.activeTool === tool ? ['toolbar-button-active'] : [])],
-        text: `${label} ${shortcut}`,
-        tooltip: title,
-        disabled: !ready,
-        onClick: () => dispatch({ type: 'setTransformTool', tool })
-    });
+    const tool = (label, shortcut, toolName) => ({ label, shortcut, disabled: !ready, checked: state.activeTool === toolName, action: () => dispatch({ type: 'setTransformTool', tool: toolName }) });
+    const menus = {
+        File: [
+            { label: 'Reset Scene', disabled: !ready, action: () => dispatch({ type: 'resetScene' }) },
+            { label: 'Close Window', shortcut: 'Alt+F4', disabled: !isDesktopEditor(), action: closeDesktopWindow }
+        ],
+        Edit: [
+            { label: 'Undo', shortcut: 'Ctrl+Z', disabled: !ready || !state.history.canUndo, action: () => dispatch({ type: 'undo' }) },
+            { label: 'Redo', shortcut: 'Ctrl+Y', disabled: !ready || !state.history.canRedo, action: () => dispatch({ type: 'redo' }) }
+        ],
+        Window: [
+            { label: 'Scene Outliner',
+                checked: !layout.hidden.includes('hierarchy'),
+                action: () => {
+                    const group = layout.externalGroups.find(item => containsPanel(item.root, 'hierarchy'));
+                    return group ? focusFloatingWindow(group.id) : layout.external.includes('hierarchy') ? focusPanelWindow('hierarchy') : layout.hidden.includes('hierarchy') ? show('hierarchy') : hide('hierarchy');
+                } },
+            { label: 'Inspector',
+                checked: !layout.hidden.includes('inspector'),
+                action: () => {
+                    const group = layout.externalGroups.find(item => containsPanel(item.root, 'inspector'));
+                    return group ? focusFloatingWindow(group.id) : layout.external.includes('inspector') ? focusPanelWindow('inspector') : layout.hidden.includes('inspector') ? show('inspector') : hide('inspector');
+                } },
+            { label: 'Open Scene Outliner in New Window', disabled: !isDesktopEditor() || layout.external.includes('hierarchy') || layout.externalGroups.some(item => containsPanel(item.root, 'hierarchy')), action: () => openExternal('hierarchy') },
+            { label: 'Open Inspector in New Window', disabled: !isDesktopEditor() || layout.external.includes('inspector') || layout.externalGroups.some(item => containsPanel(item.root, 'inspector')), action: () => openExternal('inspector') },
+            { label: 'Reset Layout', action: resetLayout }
+        ],
+        Tools: [
+            tool('Select', 'Q', 'select'), tool('Move', 'W', 'translate'), tool('Rotate', 'E', 'rotate'), tool('Scale', 'R', 'scale'),
+            { label: 'Frame Selection', shortcut: 'F', disabled: !ready, action: () => dispatch({ type: 'focusSelected' }) },
+            { label: 'Frame All', shortcut: 'Shift+F', disabled: !ready, action: () => dispatch({ type: 'frameAll' }) }
+        ],
+        Help: [{ label: 'Viewport Controls', checked: showHelp, action: () => setShowHelp(!showHelp) }]
+    };
 
-    const activeSnapTool = state.activeTool === 'select' ? 'translate' : state.activeTool;
-    const increment = state.snap[`${activeSnapTool}Increment`];
-
-    return jsx(
-        Container,
-        { class: ['editor-toolbar'] },
+    return jsx('header', { className: `editor-toolbar ${isDesktopEditor() ? 'desktop-chrome' : ''}`, ref: menuRef },
         jsx('div', { className: 'editor-brand' }, jsx('strong', null, 'LitEngine'), jsx('span', null, 'EDITOR')),
-        jsx('div', { className: 'toolbar-divider' }),
-        jsx(Button, {
-            class: ['toolbar-button', 'toolbar-icon'],
-            text: '↶',
-            tooltip: state.history.undoLabel ? `Undo ${state.history.undoLabel} (Ctrl+Z)` : 'Nothing to undo',
-            disabled: !ready || !state.history.canUndo,
-            onClick: () => dispatch({ type: 'undo' })
-        }),
-        jsx(Button, {
-            class: ['toolbar-button', 'toolbar-icon'],
-            text: '↷',
-            tooltip: state.history.redoLabel ? `Redo ${state.history.redoLabel} (Ctrl+Shift+Z)` : 'Nothing to redo',
-            disabled: !ready || !state.history.canRedo,
-            onClick: () => dispatch({ type: 'redo' })
-        }),
-        jsx('div', { className: 'toolbar-divider' }),
-        toolButton('select', 'Select', 'Q', 'Select tool (Q)'),
-        toolButton('translate', 'Move', 'W', 'Move tool (W / 1)'),
-        toolButton('rotate', 'Rotate', 'E', 'Rotate tool (E / 2)'),
-        toolButton('scale', 'Scale', 'R', 'Scale tool (R / 3)'),
-        jsx('div', { className: 'toolbar-divider' }),
-        jsx(Button, {
-            class: ['toolbar-button', 'coordinate-space'],
-            text: effectiveSpace === 'world' ? 'World' : 'Local',
-            tooltip: state.activeTool === 'scale' ? 'Scale uses local space' : 'Toggle world/local transform space (~ / X)',
-            disabled: !ready || state.activeTool === 'scale',
-            onClick: () => dispatch({
-                type: 'setCoordinateSpace',
-                coordinateSpace: stateRef.current.coordinateSpace === 'world' ? 'local' : 'world'
-            })
-        }),
-        jsx(Button, {
-            class: ['toolbar-button', 'snap-button', ...(state.snap.enabled ? ['toolbar-button-active'] : [])],
-            text: `Snap ${state.snap.enabled ? 'On' : 'Off'} · ${increment}`,
-            tooltip: `Toggle transform snap (${activeSnapTool} increment ${increment})`,
-            disabled: !ready,
-            onClick: () => dispatch({ type: 'setSnapEnabled', enabled: !stateRef.current.snap.enabled })
-        }),
-        jsx('div', { className: 'toolbar-spacer' }),
-        jsx(Button, {
-            class: 'toolbar-button',
-            text: 'Frame · F',
-            tooltip: 'Frame selection (F), or frame all (Shift+F)',
-            disabled: !ready,
-            onClick: () => dispatch({ type: 'focusSelected' })
-        }),
-        jsx(Button, {
-            class: 'toolbar-button',
-            text: 'Frame All',
-            tooltip: 'Frame all scene entities (Shift+F)',
-            disabled: !ready,
-            onClick: () => dispatch({ type: 'frameAll' })
-        }),
-        jsx(Button, {
-            class: ['toolbar-button', 'toolbar-danger'],
-            text: 'Reset Scene',
-            tooltip: 'Restore the demonstration scene',
-            disabled: !ready,
-            onClick: () => dispatch({ type: 'resetScene' })
-        })
+        jsx('nav', { className: 'global-menus', 'aria-label': 'Editor menus' },
+            ...Object.entries(menus).map(([name, entries]) => jsx('div', { className: 'global-menu', key: name },
+                jsx('button', {
+                    type: 'button',
+                    className: `global-menu-trigger ${openMenu === name ? 'is-open' : ''}`,
+                    'aria-haspopup': 'menu',
+                    'aria-expanded': openMenu === name,
+                    onClick: () => setOpenMenu(openMenu === name ? null : name)
+                }, name),
+                openMenu === name && jsx('div', { className: 'global-menu-popover', role: 'menu', 'aria-label': name },
+                    ...entries.map(entry => jsx('button', {
+                        type: 'button',
+                        role: 'menuitem',
+                        key: entry.label,
+                        disabled: entry.disabled,
+                        className: 'global-menu-item',
+                        onClick: () => {
+                            entry.action(); setOpenMenu(null);
+                        }
+                    }, jsx('span', { className: 'menu-check' }, entry.checked ? '✓' : ''), entry.label,
+                    entry.shortcut && jsx('span', { className: 'menu-shortcut' }, entry.shortcut)))
+                )
+            ))
+        ),
+        jsx('span', { className: 'global-bar-title' }, 'Scene Workspace')
     );
 }
